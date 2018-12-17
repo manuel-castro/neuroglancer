@@ -426,6 +426,13 @@ export function verifyOptionalInt(obj: any): number|undefined {
   return verifyInt(obj);
 }
 
+export function verifyOptionalPositiveInt(obj: any): number|undefined {
+  if (obj === undefined) {
+    return undefined;
+  }
+  return verifyPositiveInt(obj);
+}
+
 export function verifyOptionalBoolean(obj: any): boolean|undefined {
   if (obj === undefined) {
     return undefined;

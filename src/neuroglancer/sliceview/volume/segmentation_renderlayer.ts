@@ -54,6 +54,8 @@ export interface SliceViewSegmentationDisplayState extends SegmentationDisplaySt
   selectedAlpha: TrackableAlphaValue;
   notSelectedAlpha: TrackableAlphaValue;
   volumeSourceOptions?: VolumeSourceOptions;
+  minMIPLevelRendered?: number;
+  maxMIPLevelRendered?: number;
   hideSegmentZero: TrackableBoolean;
   objectToDataTransform: CoordinateTransform;
 }
@@ -76,7 +78,9 @@ export class SegmentationRenderLayer extends RenderLayer {
       public displayState: SliceViewSegmentationDisplayState) {
     super(multiscaleSource, {
       sourceOptions: displayState.volumeSourceOptions,
-      transform: displayState.objectToDataTransform
+      transform: displayState.objectToDataTransform,
+      minMIPLevelRendered: displayState.minMIPLevelRendered,
+      maxMIPLevelRendered: displayState.maxMIPLevelRendered
     });
     registerRedrawWhenSegmentationDisplayStateChanged(displayState, this);
     this.registerDisposer(displayState.selectedAlpha.changed.add(() => {
