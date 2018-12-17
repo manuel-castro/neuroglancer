@@ -30,6 +30,8 @@ export interface RenderLayerOptions {
   shaderError: WatchableShaderError;
   rpcType: string;
   rpcTransfer: { [index:string]: number|string|null };
+  minMIPLevelRendered: number;
+  maxMIPLevelRendered: number;
 }
 
 export abstract class RenderLayer extends GenericRenderLayer {
@@ -40,6 +42,8 @@ export abstract class RenderLayer extends GenericRenderLayer {
   transform: CoordinateTransform;
   transformedSources: {source: SliceViewChunkSource, chunkLayout: ChunkLayout}[][];
   transformedSourcesGeneration = -1;
+  minMIPLevelRendered: number|undefined;
+  maxMIPLevelRendered: number|undefined;
 
   constructor(
       public chunkManager: ChunkManager, public sources: SliceViewChunkSource[][],
@@ -50,11 +54,15 @@ export abstract class RenderLayer extends GenericRenderLayer {
       rpcType = SLICEVIEW_RENDERLAYER_RPC_ID,
       rpcTransfer = {},
       transform = new CoordinateTransform(),
+      minMIPLevelRendered,
+      maxMIPLevelRendered,
     } = options;
 
     this.rpcType = rpcType;
     this.rpcTransfer = rpcTransfer;
     this.transform = transform;
+    this.minMIPLevelRendered = minMIPLevelRendered;
+    this.maxMIPLevelRendered = maxMIPLevelRendered;
     const transformedSources = getTransformedSources(this);
 
     {
