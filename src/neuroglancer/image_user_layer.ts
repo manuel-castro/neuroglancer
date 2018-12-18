@@ -26,6 +26,7 @@ import {makeWatchableShaderError} from 'neuroglancer/webgl/dynamic_shader';
 import {RangeWidget} from 'neuroglancer/widget/range';
 import {ShaderCodeWidget} from 'neuroglancer/widget/shader_code_widget';
 import {Tab} from 'neuroglancer/widget/tab_view';
+import { VoxelSizeSelectionWidget } from './widget/voxel_size_selection_widget';
 
 require('./image_user_layer.css');
 require('neuroglancer/maximize_button.css');
@@ -98,6 +99,9 @@ function makeShaderCodeWidget(layer: ImageUserLayer) {
 class RenderingOptionsTab extends Tab {
   opacityWidget = this.registerDisposer(new RangeWidget(this.layer.opacity));
   codeWidget = this.registerDisposer(makeShaderCodeWidget(this.layer));
+  voxelSizeSelectionWidget = this.registerDisposer(new VoxelSizeSelectionWidget(
+    this.layer.minMIPLevelRendered, this.layer.maxMIPLevelRendered,
+    this.layer.voxelSizePerMIPLevel));
   constructor(public layer: ImageUserLayer) {
     super();
     const {element} = this;
@@ -106,6 +110,8 @@ class RenderingOptionsTab extends Tab {
     let topRow = document.createElement('div');
     topRow.className = 'image-dropdown-top-row';
     opacityWidget.promptElement.textContent = 'Opacity';
+
+    element.appendChild(this.voxelSizeSelectionWidget.element);
 
     let spacer = document.createElement('div');
     spacer.style.flex = '1';

@@ -327,9 +327,9 @@ export class SliceViewBase extends SharedObject {
       visibleSources.length = 0;
       const transformedSources = getTransformedSources(renderLayer);
       const numSources = transformedSources.length;
-      const minScaleIndex = (renderLayer.minMIPLevelRendered) ? renderLayer.minMIPLevelRendered : 0;
+      const minScaleIndex = (renderLayer.minMIPLevelRendered) ? renderLayer.minMIPLevelRendered.getValue() : 0;
       const maxScaleIndex =
-          (renderLayer.maxMIPLevelRendered) ? renderLayer.maxMIPLevelRendered : numSources - 1;
+        (renderLayer.maxMIPLevelRendered) ? renderLayer.maxMIPLevelRendered.getValue() : numSources - 1;
       let scaleIndex: number;
 
       // At the smallest scale, all alternative sources must have the same voxel size, which is

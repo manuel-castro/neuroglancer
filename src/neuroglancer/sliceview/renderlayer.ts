@@ -24,7 +24,7 @@ import {vec3} from 'neuroglancer/util/geom';
 import {WatchableShaderError} from 'neuroglancer/webgl/dynamic_shader';
 import {RpcId} from 'neuroglancer/worker_rpc';
 import {SharedObject} from 'neuroglancer/worker_rpc';
-import {trackableMIPLevelValue, TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
+import {trackableMinMIPLevelValue, trackableMaxMIPLevelValue, TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
 
 export interface RenderLayerOptions {
   transform: CoordinateTransform;
@@ -61,9 +61,9 @@ export abstract class RenderLayer extends GenericRenderLayer {
     this.rpcTransfer = rpcTransfer;
     this.transform = transform;
     this.minMIPLevelRendered =
-        (options.minMIPLevelRendered) ? options.minMIPLevelRendered : trackableMIPLevelValue();
+      (options.minMIPLevelRendered) ? options.minMIPLevelRendered : trackableMinMIPLevelValue();
     this.maxMIPLevelRendered =
-        (options.maxMIPLevelRendered) ? options.maxMIPLevelRendered : trackableMIPLevelValue();
+      (options.maxMIPLevelRendered) ? options.maxMIPLevelRendered : trackableMaxMIPLevelValue();
     const transformedSources = getTransformedSources(this);
 
     {

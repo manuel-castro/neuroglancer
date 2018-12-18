@@ -1,5 +1,5 @@
 import {UserLayer} from 'neuroglancer/layer';
-import {TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
+import {trackableMinMIPLevelValue, trackableMaxMIPLevelValue, TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
 import {UserLayerWithVolumeSource, UserLayerWithVolumeSourceMixin} from 'neuroglancer/user_layer_with_volume_source';
 import {RenderLayer as GenericSliceViewRenderLayer} from 'neuroglancer/sliceview/renderlayer.ts';
 import {vec3} from 'neuroglancer/util/geom';
@@ -10,8 +10,8 @@ const MAX_MIP_LEVEL_RENDERED_JSON_KEY = 'maxMIPLevelRendered';
 // Only called by UserLayerWithMIPLevelRestrictionsMixin in this file.
 function helper<TBase extends {new (...args: any[]): UserLayerWithVolumeSource}>(Base: TBase) {
   class C extends Base implements UserLayerWithMIPLevelConstraints {
-    minMIPLevelRendered: TrackableMIPLevelValue;
-    maxMIPLevelRendered: TrackableMIPLevelValue;
+    minMIPLevelRendered = trackableMinMIPLevelValue();
+    maxMIPLevelRendered = trackableMaxMIPLevelValue();
     voxelSizePerMIPLevel: vec3[];
 
     constructor(...args: any[]) {
@@ -43,12 +43,14 @@ function helper<TBase extends {new (...args: any[]): UserLayerWithVolumeSource}>
     }
 
     protected setVoxelSizePerMIPLevel(renderlayer: GenericSliceViewRenderLayer) {
-      if (this.voxelSizePerMIPLevel.length > 0) {
+      if (!this.voxelSizePerMIPLevel) {
         this.voxelSizePerMIPLevel = [];
       }
       renderlayer.transformedSources.forEach(transformedSource => {
         this.voxelSizePerMIPLevel.push(transformedSource[0].source.spec.voxelSize);
       });
+      this.minMIPLevelRendered.setHighestMIPLevel(renderlayer.transformedSources.length);
+      this.maxMIPLevelRendered.setHighestMIPLevel(renderlayer.transformedSources.length);
     }
 
     // Ensure that minMIPLevelRendered <= maxMIPLevelRendered
