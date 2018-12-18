@@ -49,3 +49,19 @@ export function trackableMinMIPLevelValue(initialValue = undefined): TrackableMI
 export function trackableMaxMIPLevelValue(initialValue = undefined): TrackableMIPLevelValue {
   return new TrackableMaxMIPLevelValue(initialValue, verifyOptionalNonnegativeInt);
 }
+
+// Temporary hack
+export function validateMIPLevelConstraints(minMIPLevelRendered: TrackableMIPLevelValue, maxMIPLevelRendered: TrackableMIPLevelValue, minLevelWasChanged: boolean): boolean {
+  if (minMIPLevelRendered.value && maxMIPLevelRendered.value &&
+      minMIPLevelRendered.value > maxMIPLevelRendered.value) {
+    // Invalid levels so adjust
+    if (minLevelWasChanged) {
+      maxMIPLevelRendered.value = minMIPLevelRendered.value;
+    }
+    else {
+      minMIPLevelRendered.value = maxMIPLevelRendered.value;
+    }
+    return false;
+  }
+  return true;
+}

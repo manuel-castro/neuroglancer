@@ -17,10 +17,14 @@ function helper<TBase extends {new (...args: any[]): UserLayerWithVolumeSource}>
     constructor(...args: any[]) {
       super(...args);
       this.registerDisposer(this.minMIPLevelRendered.changed.add(() => {
-        this.validateMIPLevelConstraints(true);
+        if (this.validateMIPLevelConstraints(true)) {
+          this.specificationChanged.dispatch();
+        }
       }));
       this.registerDisposer(this.maxMIPLevelRendered.changed.add(() => {
-        this.validateMIPLevelConstraints(false);
+        if (this.validateMIPLevelConstraints(false)) {
+          this.specificationChanged.dispatch();
+        }
       }));
     }
 
@@ -53,8 +57,9 @@ function helper<TBase extends {new (...args: any[]): UserLayerWithVolumeSource}>
       this.maxMIPLevelRendered.setHighestMIPLevel(renderlayer.transformedSources.length);
     }
 
-    // Ensure that minMIPLevelRendered <= maxMIPLevelRendered
-    private validateMIPLevelConstraints(minLevelWasChanged: boolean) {
+    // Ensure that minMIPLevelRendered <= maxMIPLevelRendered. Return true/false
+    // to only kick off specification change dispatch once when levels are adjusted.
+    private validateMIPLevelConstraints(minLevelWasChanged: boolean): boolean {
       if (this.minMIPLevelRendered.value && this.maxMIPLevelRendered.value &&
           this.minMIPLevelRendered.value > this.maxMIPLevelRendered.value) {
         // Invalid levels so adjust
@@ -64,7 +69,9 @@ function helper<TBase extends {new (...args: any[]): UserLayerWithVolumeSource}>
         else {
           this.minMIPLevelRendered.value = this.maxMIPLevelRendered.value;
         }
+        return false;
       }
+      return true;
     }
   }
   return C;
