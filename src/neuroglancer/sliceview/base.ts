@@ -21,6 +21,7 @@ import {approxEqual} from 'neuroglancer/util/compare';
 import {DATA_TYPE_BYTES, DataType} from 'neuroglancer/util/data_type';
 import {effectiveScalingFactorFromMat4, identityMat4, kAxes, kInfinityVec, kZeroVec, mat4, rectifyTransformMatrixIfAxisAligned, transformVectorByMat4, vec3} from 'neuroglancer/util/geom';
 import {SharedObject} from 'neuroglancer/worker_rpc';
+import { TrackableMIPLevelValue } from 'neuroglancer/trackable_mip_level';
 
 export {DATA_TYPE_BYTES, DataType};
 
@@ -126,8 +127,8 @@ export interface RenderLayer {
   transform: CoordinateTransform;
   transformedSources: TransformedSource[][]|undefined;
   transformedSourcesGeneration: number;
-  minMIPLevelRendered?: number;
-  maxMIPLevelRendered?: number;
+  minMIPLevelRendered?: TrackableMIPLevelValue;
+  maxMIPLevelRendered?: TrackableMIPLevelValue;
 }
 
 export function getTransformedSources(renderLayer: RenderLayer) {

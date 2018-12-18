@@ -24,14 +24,15 @@ import {vec3} from 'neuroglancer/util/geom';
 import {WatchableShaderError} from 'neuroglancer/webgl/dynamic_shader';
 import {RpcId} from 'neuroglancer/worker_rpc';
 import {SharedObject} from 'neuroglancer/worker_rpc';
+import {trackableMIPLevelValue, TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
 
 export interface RenderLayerOptions {
   transform: CoordinateTransform;
   shaderError: WatchableShaderError;
   rpcType: string;
   rpcTransfer: { [index:string]: number|string|null };
-  minMIPLevelRendered: number;
-  maxMIPLevelRendered: number;
+  minMIPLevelRendered: TrackableMIPLevelValue;
+  maxMIPLevelRendered: TrackableMIPLevelValue;
 }
 
 export abstract class RenderLayer extends GenericRenderLayer {
@@ -42,8 +43,8 @@ export abstract class RenderLayer extends GenericRenderLayer {
   transform: CoordinateTransform;
   transformedSources: {source: SliceViewChunkSource, chunkLayout: ChunkLayout}[][];
   transformedSourcesGeneration = -1;
-  minMIPLevelRendered: number|undefined;
-  maxMIPLevelRendered: number|undefined;
+  minMIPLevelRendered: TrackableMIPLevelValue;
+  maxMIPLevelRendered: TrackableMIPLevelValue;
 
   constructor(
       public chunkManager: ChunkManager, public sources: SliceViewChunkSource[][],
@@ -54,15 +55,15 @@ export abstract class RenderLayer extends GenericRenderLayer {
       rpcType = SLICEVIEW_RENDERLAYER_RPC_ID,
       rpcTransfer = {},
       transform = new CoordinateTransform(),
-      minMIPLevelRendered,
-      maxMIPLevelRendered,
     } = options;
 
     this.rpcType = rpcType;
     this.rpcTransfer = rpcTransfer;
     this.transform = transform;
-    this.minMIPLevelRendered = minMIPLevelRendered;
-    this.maxMIPLevelRendered = maxMIPLevelRendered;
+    this.minMIPLevelRendered =
+        (options.minMIPLevelRendered) ? options.minMIPLevelRendered : trackableMIPLevelValue();
+    this.maxMIPLevelRendered =
+        (options.maxMIPLevelRendered) ? options.maxMIPLevelRendered : trackableMIPLevelValue();
     const transformedSources = getTransformedSources(this);
 
     {

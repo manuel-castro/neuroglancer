@@ -70,6 +70,7 @@ export class ImageUserLayer extends Base {
           minMIPLevelRendered: this.minMIPLevelRendered,
           maxMIPLevelRendered: this.maxMIPLevelRendered,
         });
+        this.setVoxelSizePerMIPLevel(renderLayer);
         this.addRenderLayer(renderLayer);
         this.shaderError.changed.dispatch();
         this.isReady = true;

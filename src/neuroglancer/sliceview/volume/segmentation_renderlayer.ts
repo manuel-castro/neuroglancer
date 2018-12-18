@@ -24,6 +24,7 @@ import {VolumeSourceOptions} from 'neuroglancer/sliceview/volume/base';
 import {MultiscaleVolumeChunkSource} from 'neuroglancer/sliceview/volume/frontend';
 import {RenderLayer} from 'neuroglancer/sliceview/volume/renderlayer';
 import {TrackableAlphaValue} from 'neuroglancer/trackable_alpha';
+import {TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
 import {TrackableBoolean} from 'neuroglancer/trackable_boolean';
 import {DisjointUint64Sets} from 'neuroglancer/util/disjoint_sets';
 import {ShaderBuilder, ShaderProgram} from 'neuroglancer/webgl/shader';
@@ -54,8 +55,8 @@ export interface SliceViewSegmentationDisplayState extends SegmentationDisplaySt
   selectedAlpha: TrackableAlphaValue;
   notSelectedAlpha: TrackableAlphaValue;
   volumeSourceOptions?: VolumeSourceOptions;
-  minMIPLevelRendered?: number;
-  maxMIPLevelRendered?: number;
+  minMIPLevelRendered: TrackableMIPLevelValue;
+  maxMIPLevelRendered: TrackableMIPLevelValue;
   hideSegmentZero: TrackableBoolean;
   objectToDataTransform: CoordinateTransform;
 }

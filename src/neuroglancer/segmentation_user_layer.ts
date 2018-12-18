@@ -225,7 +225,9 @@ export class SegmentationUserLayer extends Base {
       ++remaining;
       multiscaleSource.then(volume => {
         if (!this.wasDisposed) {
-          this.addRenderLayer(new SegmentationRenderLayer(volume, this.displayState));
+          const segmentationRenderLayer = new SegmentationRenderLayer(volume, this.displayState);
+          this.setVoxelSizePerMIPLevel(segmentationRenderLayer);
+          this.addRenderLayer(segmentationRenderLayer);
           // Chunked Graph Server
           if (this.chunkedGraphUrl === undefined && volume.getChunkedGraphUrl) {
             this.chunkedGraphUrl = volume.getChunkedGraphUrl();
