@@ -80,8 +80,13 @@ export abstract class RenderLayer extends GenericRenderLayer {
     const rpc = this.chunkManager.rpc!;
     sharedObject.RPC_TYPE_ID = this.rpcType;
     const sourceIds = sources.map(alternatives => alternatives.map(source => source.rpcId!));
-    sharedObject.initializeCounterpart(
-        rpc, {'sources': sourceIds, 'transform': transform.transform, ...rpcTransfer});
+    sharedObject.initializeCounterpart(rpc, {
+      'sources': sourceIds,
+      'transform': transform.transform,
+      'minMIPLevel': this.minMIPLevelRendered.getValue(),
+      'maxMIPLevel': this.maxMIPLevelRendered.getValue(),
+      ...rpcTransfer
+    });
     this.rpcId = sharedObject.rpcId;
 
     this.registerDisposer(transform.changed.add(() => {

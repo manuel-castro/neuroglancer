@@ -4,8 +4,8 @@ import {UserLayerWithVolumeSource, UserLayerWithVolumeSourceMixin} from 'neurogl
 import {RenderLayer as GenericSliceViewRenderLayer} from 'neuroglancer/sliceview/renderlayer.ts';
 import {vec3} from 'neuroglancer/util/geom';
 
-const MIN_MIP_LEVEL_RENDERED_JSON_KEY = 'minMIPLevelRendered';
-const MAX_MIP_LEVEL_RENDERED_JSON_KEY = 'maxMIPLevelRendered';
+export const MIN_MIP_LEVEL_JSON_KEY = 'minMIPLevel';
+export const MAX_MIP_LEVEL_JSON_KEY = 'maxMIPLevel';
 
 // Only called by UserLayerWithMIPLevelRestrictionsMixin in this file.
 function helper<TBase extends {new (...args: any[]): UserLayerWithVolumeSource}>(Base: TBase) {

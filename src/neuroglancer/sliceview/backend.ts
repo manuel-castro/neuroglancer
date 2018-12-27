@@ -22,6 +22,7 @@ import {mat4, vec3, vec3Key} from 'neuroglancer/util/geom';
 import {NullarySignal} from 'neuroglancer/util/signal';
 import {getBasePriority, getPriorityTier, withSharedVisibility} from 'neuroglancer/visibility_priority/backend';
 import {registerRPC, registerSharedObject, RPC, SharedObjectCounterpart} from 'neuroglancer/worker_rpc';
+import { TrackableMIPLevelValue, trackableMinMIPLevelValue, trackableMaxMIPLevelValue, validateMIPLevelConstraints } from 'neuroglancer/trackable_mip_level';
 
 const BASE_PRIORITY = -1e12;
 const SCALE_PRIORITY_MULTIPLIER = 1e9;
@@ -98,6 +99,17 @@ export class SliceView extends SliceViewIntermediateBase {
     this.visibleLayers.delete(layer);
     layer.layerChanged.remove(this.handleLayerChanged);
     layer.transform.changed.remove(this.invalidateVisibleSources);
+    layer.minMIPLevelRendered.changed.add(() => {
+      if (validateMIPLevelConstraints(layer.minMIPLevelRendered, layer.maxMIPLevelRendered, true)) {
+        // TODO: change to invalidateVisibleSources?
+        this.visibleSourcesStale = true;
+      }
+    });
+    layer.maxMIPLevelRendered.changed.add(() => {
+      if (validateMIPLevelConstraints(layer.minMIPLevelRendered, layer.maxMIPLevelRendered, false)) {
+        this.visibleSourcesStale = true;
+      }
+    });
     this.invalidateVisibleSources();
   }
 
@@ -208,6 +220,8 @@ export class RenderLayer extends SharedObjectCounterpart implements RenderLayerI
   transform = new CoordinateTransform();
   transformedSources: {source: SliceViewChunkSource, chunkLayout: ChunkLayout}[][];
   transformedSourcesGeneration = -1;
+  minMIPLevelRendered: TrackableMIPLevelValue;
+  maxMIPLevelRendered: TrackableMIPLevelValue;
 
   constructor(rpc: RPC, options: any) {
     super(rpc, options);
@@ -223,6 +237,8 @@ export class RenderLayer extends SharedObjectCounterpart implements RenderLayerI
     }
     mat4.copy(this.transform.transform, options['transform']);
     this.transform.changed.add(this.layerChanged.dispatch);
+    this.minMIPLevelRendered = trackableMinMIPLevelValue(options['minMIPLevel']);
+    this.maxMIPLevelRendered = trackableMaxMIPLevelValue(options['maxMIPLevel']);
   }
 }
 registerRPC(SLICEVIEW_RENDERLAYER_UPDATE_TRANSFORM_RPC_ID, function(x) {

@@ -152,6 +152,7 @@ export class SliceView extends Base {
     renderLayer.transform.changed.add(this.invalidateVisibleSources);
     renderLayer.minMIPLevelRendered.changed.add(() => {
       if (validateMIPLevelConstraints(renderLayer.minMIPLevelRendered, renderLayer.maxMIPLevelRendered, true)) {
+        // TODO: change to invalidateVisibleSources?
         this.visibleSourcesStale = true;
       }
     });
