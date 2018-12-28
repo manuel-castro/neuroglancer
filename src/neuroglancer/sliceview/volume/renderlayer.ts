@@ -321,11 +321,11 @@ ${getShaderType(this.dataType)} getDataValue() { return getDataValue(0); }
         chunkDataSize = newChunkDataSize;
         vertexComputationManager.setupChunkDataSize(gl, shader, chunkDataSize);
       };
-      let numDrawnChunks = 0;
+      // let numDrawnChunks = 0;
       for (let key of visibleChunks) {
         let chunk = chunks.get(key);
         if (chunk && chunk.state === ChunkState.GPU_MEMORY) {
-          numDrawnChunks++;
+          // numDrawnChunks++;
           let newChunkDataSize = chunk.chunkDataSize;
           if (newChunkDataSize !== chunkDataSize) {
             setChunkDataSize(newChunkDataSize);
@@ -336,7 +336,7 @@ ${getShaderType(this.dataType)} getDataValue() { return getDataValue(0); }
           vertexComputationManager.drawChunk(gl, shader, chunkPosition);
         }
       }
-      console.log(`Num chunks: ${visibleChunks.length}, num drawn: ${numDrawnChunks}, source chunks: ${source.chunks.size}`);
+      // console.log(`Num chunks: ${visibleChunks.length}, num drawn: ${numDrawnChunks}, source chunks: ${source.chunks.size}`);
     }
     chunkFormat.endDrawing(gl, shader);
     this.endSlice(shader);

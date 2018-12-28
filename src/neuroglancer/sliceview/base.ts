@@ -21,7 +21,7 @@ import {approxEqual} from 'neuroglancer/util/compare';
 import {DATA_TYPE_BYTES, DataType} from 'neuroglancer/util/data_type';
 import {effectiveScalingFactorFromMat4, identityMat4, kAxes, kInfinityVec, kZeroVec, mat4, rectifyTransformMatrixIfAxisAligned, transformVectorByMat4, vec3} from 'neuroglancer/util/geom';
 import {SharedObject} from 'neuroglancer/worker_rpc';
-import { TrackableMIPLevelValue } from 'neuroglancer/trackable_mip_level';
+import { TrackableMIPLevelConstraints } from 'neuroglancer/trackable_mip_level_constraints';
 
 export {DATA_TYPE_BYTES, DataType};
 
@@ -127,8 +127,7 @@ export interface RenderLayer {
   transform: CoordinateTransform;
   transformedSources: TransformedSource[][]|undefined;
   transformedSourcesGeneration: number;
-  minMIPLevelRendered?: TrackableMIPLevelValue;
-  maxMIPLevelRendered?: TrackableMIPLevelValue;
+  mipLevelConstraints?: TrackableMIPLevelConstraints;
 }
 
 export function getTransformedSources(renderLayer: RenderLayer) {
@@ -327,9 +326,8 @@ export class SliceViewBase extends SharedObject {
       visibleSources.length = 0;
       const transformedSources = getTransformedSources(renderLayer);
       const numSources = transformedSources.length;
-      const minScaleIndex = (renderLayer.minMIPLevelRendered) ? renderLayer.minMIPLevelRendered.getValue() : 0;
-      const maxScaleIndex =
-        (renderLayer.maxMIPLevelRendered) ? renderLayer.maxMIPLevelRendered.getValue() : numSources - 1;
+      const minScaleIndex = renderLayer.mipLevelConstraints!.getDeFactoMinMIPLevel();
+      const maxScaleIndex = renderLayer.mipLevelConstraints!.getDeFactoMaxMIPLevel();
       let scaleIndex: number;
 
       // At the smallest scale, all alternative sources must have the same voxel size, which is
@@ -924,3 +922,5 @@ export const SLICEVIEW_ADD_VISIBLE_LAYER_RPC_ID = 'SliceView.addVisibleLayer';
 export const SLICEVIEW_REMOVE_VISIBLE_LAYER_RPC_ID = 'SliceView.removeVisibleLayer';
 export const SLICEVIEW_UPDATE_VIEW_RPC_ID = 'SliceView.updateView';
 export const SLICEVIEW_RENDERLAYER_UPDATE_TRANSFORM_RPC_ID = 'SliceView.updateTransform';
+export const SLICEVIEW_RENDERLAYER_UPDATE_MIP_LEVEL_CONSTRAINTS_RPC_ID =
+  'SliceView.updateMIPLevelConstraints';

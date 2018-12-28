@@ -17,22 +17,21 @@
 import {ChunkManager} from 'neuroglancer/chunk_manager/frontend';
 import {CoordinateTransform} from 'neuroglancer/coordinate_transform';
 import {RenderLayer as GenericRenderLayer} from 'neuroglancer/layer';
-import {getTransformedSources, SLICEVIEW_RENDERLAYER_RPC_ID, SLICEVIEW_RENDERLAYER_UPDATE_TRANSFORM_RPC_ID} from 'neuroglancer/sliceview/base';
+import { getTransformedSources, SLICEVIEW_RENDERLAYER_RPC_ID, SLICEVIEW_RENDERLAYER_UPDATE_TRANSFORM_RPC_ID, SLICEVIEW_RENDERLAYER_UPDATE_MIP_LEVEL_CONSTRAINTS_RPC_ID } from 'neuroglancer/sliceview/base';
 import {ChunkLayout} from 'neuroglancer/sliceview/chunk_layout';
 import {SliceView, SliceViewChunkSource} from 'neuroglancer/sliceview/frontend';
 import {vec3} from 'neuroglancer/util/geom';
 import {WatchableShaderError} from 'neuroglancer/webgl/dynamic_shader';
 import {RpcId} from 'neuroglancer/worker_rpc';
 import {SharedObject} from 'neuroglancer/worker_rpc';
-import {trackableMinMIPLevelValue, trackableMaxMIPLevelValue, TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
+import {TrackableMIPLevelConstraints} from 'neuroglancer/trackable_mip_level_constraints';
 
 export interface RenderLayerOptions {
   transform: CoordinateTransform;
   shaderError: WatchableShaderError;
   rpcType: string;
   rpcTransfer: { [index:string]: number|string|null };
-  minMIPLevelRendered: TrackableMIPLevelValue;
-  maxMIPLevelRendered: TrackableMIPLevelValue;
+  mipLevelConstraints: TrackableMIPLevelConstraints;
 }
 
 export abstract class RenderLayer extends GenericRenderLayer {
@@ -43,8 +42,7 @@ export abstract class RenderLayer extends GenericRenderLayer {
   transform: CoordinateTransform;
   transformedSources: {source: SliceViewChunkSource, chunkLayout: ChunkLayout}[][];
   transformedSourcesGeneration = -1;
-  minMIPLevelRendered: TrackableMIPLevelValue;
-  maxMIPLevelRendered: TrackableMIPLevelValue;
+  mipLevelConstraints: TrackableMIPLevelConstraints;
 
   constructor(
       public chunkManager: ChunkManager, public sources: SliceViewChunkSource[][],
@@ -55,16 +53,16 @@ export abstract class RenderLayer extends GenericRenderLayer {
       rpcType = SLICEVIEW_RENDERLAYER_RPC_ID,
       rpcTransfer = {},
       transform = new CoordinateTransform(),
+      mipLevelConstraints = new TrackableMIPLevelConstraints(),
     } = options;
+    const {minMIPLevel, maxMIPLevel} = mipLevelConstraints;
 
     this.rpcType = rpcType;
     this.rpcTransfer = rpcTransfer;
     this.transform = transform;
-    this.minMIPLevelRendered =
-      (options.minMIPLevelRendered) ? options.minMIPLevelRendered : trackableMinMIPLevelValue();
-    this.maxMIPLevelRendered =
-      (options.maxMIPLevelRendered) ? options.maxMIPLevelRendered : trackableMaxMIPLevelValue();
+    this.mipLevelConstraints = mipLevelConstraints;
     const transformedSources = getTransformedSources(this);
+    mipLevelConstraints.setNumberLevels(this.transformedSources.length);
 
     {
       const {source, chunkLayout} = transformedSources[0][0];
@@ -83,8 +81,9 @@ export abstract class RenderLayer extends GenericRenderLayer {
     sharedObject.initializeCounterpart(rpc, {
       'sources': sourceIds,
       'transform': transform.transform,
-      'minMIPLevel': this.minMIPLevelRendered.getValue(),
-      'maxMIPLevel': this.maxMIPLevelRendered.getValue(),
+      'minMIPLevel': minMIPLevel.value,
+      'maxMIPLevel': maxMIPLevel.value,
+      'numberOfMIPLevels': transformedSources.length,
       ...rpcTransfer
     });
     this.rpcId = sharedObject.rpcId;
@@ -93,6 +92,12 @@ export abstract class RenderLayer extends GenericRenderLayer {
       rpc.invoke(
           SLICEVIEW_RENDERLAYER_UPDATE_TRANSFORM_RPC_ID,
           {id: this.rpcId, value: transform.transform});
+    }));
+
+    this.registerDisposer(mipLevelConstraints.changed.add(() => {
+      rpc.invoke(
+          SLICEVIEW_RENDERLAYER_UPDATE_MIP_LEVEL_CONSTRAINTS_RPC_ID,
+          {id: this.rpcId, minMIPLevel: minMIPLevel.value, maxMIPLevel: maxMIPLevel.value});
     }));
 
     this.setReady(true);

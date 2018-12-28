@@ -68,8 +68,7 @@ export class ImageUserLayer extends Base {
           fragmentMain: this.fragmentMain,
           shaderError: this.shaderError,
           transform: this.transform,
-          minMIPLevelRendered: this.minMIPLevelRendered,
-          maxMIPLevelRendered: this.maxMIPLevelRendered,
+          mipLevelConstraints: this.mipLevelConstraints
         });
         this.setVoxelSizePerMIPLevel(renderLayer);
         this.addRenderLayer(renderLayer);
@@ -100,8 +99,7 @@ class RenderingOptionsTab extends Tab {
   opacityWidget = this.registerDisposer(new RangeWidget(this.layer.opacity));
   codeWidget = this.registerDisposer(makeShaderCodeWidget(this.layer));
   voxelSizeSelectionWidget = this.registerDisposer(new VoxelSizeSelectionWidget(
-    this.layer.minMIPLevelRendered, this.layer.maxMIPLevelRendered,
-    this.layer.voxelSizePerMIPLevel));
+      this.layer.mipLevelConstraints, this.layer.voxelSizePerMIPLevel));
   constructor(public layer: ImageUserLayer) {
     super();
     const {element} = this;

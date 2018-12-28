@@ -87,8 +87,7 @@ export class SegmentationUserLayer extends Base {
         objectToDataTransform: this.transform,
         fragmentMain: getTrackableFragmentMain(),
         shaderError: makeWatchableShaderError(),
-        minMIPLevelRendered: this.minMIPLevelRendered,
-        maxMIPLevelRendered: this.maxMIPLevelRendered,
+        mipLevelConstraints: this.mipLevelConstraints
       };
 
   /**
@@ -611,8 +610,7 @@ class DisplayOptionsTab extends Tab {
   codeWidget: ShaderCodeWidget|undefined;
   chunkedGraphWidget: ChunkedGraphWidget|undefined;
   voxelSizeSelectionWidget = this.registerDisposer(new VoxelSizeSelectionWidget(
-      this.layer.displayState.minMIPLevelRendered, this.layer.displayState.maxMIPLevelRendered,
-      this.layer.voxelSizePerMIPLevel));
+      this.layer.displayState.mipLevelConstraints, this.layer.voxelSizePerMIPLevel));
 
   constructor(public layer: SegmentationUserLayer) {
     super();

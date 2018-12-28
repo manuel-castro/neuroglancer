@@ -24,7 +24,7 @@ import {VolumeSourceOptions} from 'neuroglancer/sliceview/volume/base';
 import {MultiscaleVolumeChunkSource} from 'neuroglancer/sliceview/volume/frontend';
 import {RenderLayer} from 'neuroglancer/sliceview/volume/renderlayer';
 import {TrackableAlphaValue} from 'neuroglancer/trackable_alpha';
-import {TrackableMIPLevelValue} from 'neuroglancer/trackable_mip_level';
+import {TrackableMIPLevelConstraints} from 'neuroglancer/trackable_mip_level_constraints';
 import {TrackableBoolean} from 'neuroglancer/trackable_boolean';
 import {DisjointUint64Sets} from 'neuroglancer/util/disjoint_sets';
 import {ShaderBuilder, ShaderProgram} from 'neuroglancer/webgl/shader';
@@ -55,8 +55,7 @@ export interface SliceViewSegmentationDisplayState extends SegmentationDisplaySt
   selectedAlpha: TrackableAlphaValue;
   notSelectedAlpha: TrackableAlphaValue;
   volumeSourceOptions?: VolumeSourceOptions;
-  minMIPLevelRendered: TrackableMIPLevelValue;
-  maxMIPLevelRendered: TrackableMIPLevelValue;
+  mipLevelConstraints: TrackableMIPLevelConstraints;
   hideSegmentZero: TrackableBoolean;
   objectToDataTransform: CoordinateTransform;
 }
@@ -80,8 +79,7 @@ export class SegmentationRenderLayer extends RenderLayer {
     super(multiscaleSource, {
       sourceOptions: displayState.volumeSourceOptions,
       transform: displayState.objectToDataTransform,
-      minMIPLevelRendered: displayState.minMIPLevelRendered,
-      maxMIPLevelRendered: displayState.maxMIPLevelRendered
+      mipLevelConstraints: displayState.mipLevelConstraints
     });
     registerRedrawWhenSegmentationDisplayStateChanged(displayState, this);
     this.registerDisposer(displayState.selectedAlpha.changed.add(() => {

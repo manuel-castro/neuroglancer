@@ -32,7 +32,6 @@ import {FramebufferConfiguration, makeTextureBuffers, StencilBuffer} from 'neuro
 import {ShaderBuilder, ShaderModule, ShaderProgram} from 'neuroglancer/webgl/shader';
 import {getSquareCornersBuffer} from 'neuroglancer/webgl/square_corners_buffer';
 import {registerSharedObjectOwner, RPC} from 'neuroglancer/worker_rpc';
-import {validateMIPLevelConstraints} from 'neuroglancer/trackable_mip_level';
 
 export type GenericChunkKey = string;
 
@@ -150,32 +149,19 @@ export class SliceView extends Base {
   private bindVisibleRenderLayer(renderLayer: RenderLayer) {
     renderLayer.redrawNeeded.add(this.viewChanged.dispatch);
     renderLayer.transform.changed.add(this.invalidateVisibleSources);
-    renderLayer.minMIPLevelRendered.changed.add(() => {
-      if (validateMIPLevelConstraints(renderLayer.minMIPLevelRendered, renderLayer.maxMIPLevelRendered, true)) {
-        // TODO: change to invalidateVisibleSources?
-        this.visibleSourcesStale = true;
-      }
-    });
-    renderLayer.maxMIPLevelRendered.changed.add(() => {
-      if (validateMIPLevelConstraints(renderLayer.minMIPLevelRendered, renderLayer.maxMIPLevelRendered, false)) {
-        this.visibleSourcesStale = true;
-      }
-    });
+    // renderLayer.mipLevelConstraints.changed.add(() => {
+    //   this.visibleSourcesStale = true;
+    // });
+    renderLayer.mipLevelConstraints.changed.add(this.invalidateVisibleSources);
   }
 
   private unbindVisibleRenderLayer(renderLayer: RenderLayer) {
     renderLayer.redrawNeeded.remove(this.viewChanged.dispatch);
     renderLayer.transform.changed.remove(this.invalidateVisibleSources);
-    renderLayer.minMIPLevelRendered.changed.remove(() => {
-      if (validateMIPLevelConstraints(renderLayer.minMIPLevelRendered, renderLayer.maxMIPLevelRendered, true)) {
-        this.visibleSourcesStale = true;
-      }
-    });
-    renderLayer.maxMIPLevelRendered.changed.remove(() => {
-      if (validateMIPLevelConstraints(renderLayer.minMIPLevelRendered, renderLayer.maxMIPLevelRendered, false)) {
-        this.visibleSourcesStale = true;
-      }
-    });
+    // renderLayer.mipLevelConstraints.changed.add(() => {
+    //   this.visibleSourcesStale = true;
+    // });
+    renderLayer.mipLevelConstraints.changed.remove(this.invalidateVisibleSources);
   }
 
   private updateVisibleLayersNow() {
