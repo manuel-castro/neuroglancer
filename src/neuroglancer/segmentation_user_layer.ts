@@ -46,7 +46,7 @@ import {SegmentSetWidget} from 'neuroglancer/widget/segment_set_widget';
 import {ShaderCodeWidget} from 'neuroglancer/widget/shader_code_widget';
 import {Tab} from 'neuroglancer/widget/tab_view';
 import {Uint64EntryWidget} from 'neuroglancer/widget/uint64_entry_widget';
-import { VoxelSizeSelectionWidget } from './widget/voxel_size_selection_widget';
+// import { VoxelSizeSelectionWidget } from 'neuroglancer/widget/voxel_size_selection_widget';
 
 require('neuroglancer/noselect.css');
 require('./segmentation_user_layer.css');
@@ -226,7 +226,7 @@ export class SegmentationUserLayer extends Base {
       multiscaleSource.then(volume => {
         if (!this.wasDisposed) {
           const segmentationRenderLayer = new SegmentationRenderLayer(volume, this.displayState);
-          this.setVoxelSizePerMIPLevel(segmentationRenderLayer);
+          this.populateVoxelSelectionWidget(segmentationRenderLayer);
           this.addRenderLayer(segmentationRenderLayer);
           // Chunked Graph Server
           if (this.chunkedGraphUrl === undefined && volume.getChunkedGraphUrl) {
@@ -609,8 +609,8 @@ class DisplayOptionsTab extends Tab {
   objectAlphaWidget = this.registerDisposer(new RangeWidget(this.layer.displayState.objectAlpha));
   codeWidget: ShaderCodeWidget|undefined;
   chunkedGraphWidget: ChunkedGraphWidget|undefined;
-  voxelSizeSelectionWidget = this.registerDisposer(new VoxelSizeSelectionWidget(
-      this.layer.displayState.mipLevelConstraints, this.layer.voxelSizePerMIPLevel));
+  // voxelSizeSelectionWidget = this.registerDisposer(new VoxelSizeSelectionWidget(
+  //     this.layer.displayState.mipLevelConstraints, this.layer.voxelSizePerMIPLevel));
 
   constructor(public layer: SegmentationUserLayer) {
     super();
@@ -637,7 +637,7 @@ class DisplayOptionsTab extends Tab {
         this.objectAlphaWidget.element));
     element.appendChild(this.objectAlphaWidget.element);
 
-    element.appendChild(this.voxelSizeSelectionWidget.element);
+    // element.appendChild(this.voxelSizeSelectionWidget.element);
 
     {
       const checkbox =

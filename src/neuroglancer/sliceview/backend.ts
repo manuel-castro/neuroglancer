@@ -102,7 +102,7 @@ export class SliceView extends SliceViewIntermediateBase {
     // layer.mipLevelConstraints.changed.add(() => {
     //   this.visibleSourcesStale = true;
     // });
-    layer.mipLevelConstraints.changed.add(this.invalidateVisibleSources);
+    layer.mipLevelConstraints.changed.remove(this.invalidateVisibleSources);
     this.invalidateVisibleSources();
   }
 
@@ -113,7 +113,7 @@ export class SliceView extends SliceViewIntermediateBase {
     // layer.mipLevelConstraints.changed.add(() => {
     //   this.visibleSourcesStale = true;
     // });
-    layer.mipLevelConstraints.changed.remove(this.invalidateVisibleSources);
+    layer.mipLevelConstraints.changed.add(this.invalidateVisibleSources);
     this.invalidateVisibleSources();
   }
 
@@ -249,6 +249,5 @@ registerRPC(SLICEVIEW_RENDERLAYER_UPDATE_MIP_LEVEL_CONSTRAINTS_RPC_ID, function(
   const layer = <RenderLayer>this.get(x.id);
   const newMinMIPLevelValue: number|undefined = x.minMIPLevel;
   const newMaxMIPLevelValue: number|undefined = x.maxMIPLevel;
-  layer.mipLevelConstraints.maxMIPLevel.value = newMinMIPLevelValue;
-  layer.mipLevelConstraints.maxMIPLevel.value = newMaxMIPLevelValue;
+  layer.mipLevelConstraints.restoreState(newMinMIPLevelValue, newMaxMIPLevelValue);
 });

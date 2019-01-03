@@ -1,6 +1,6 @@
 import {TrackableValue} from 'neuroglancer/trackable_value';
 import {RefCounted} from 'neuroglancer/util/disposable';
-import {verifyInt, verifyNonnegativeInt, verifyOptionalNonnegativeInt} from 'neuroglancer/util/json';
+import {verifyNonnegativeInt, verifyOptionalNonnegativeInt} from 'neuroglancer/util/json';
 import {NullarySignal} from 'neuroglancer/util/signal';
 
 export type TrackableMIPLevel = TrackableValue<number|undefined>;
@@ -10,6 +10,7 @@ export class TrackableMIPLevelConstraints extends RefCounted {
   maxMIPLevel: TrackableMIPLevel;
   changed = new NullarySignal();
   private numberLevels: number|undefined;
+  private dispatchOff = false;
 
   constructor(
       initialMinMIPLevel: number|undefined = undefined,
@@ -28,33 +29,43 @@ export class TrackableMIPLevelConstraints extends RefCounted {
     }));
   }
 
-  public restoreState(newMinMIPLevel: number|undefined, newMaxMIPLevel: number|undefined) {
+  public restoreState(
+      newMinMIPLevel: number|undefined = undefined, newMaxMIPLevel: number|undefined = undefined) {
     this.verifyValidConstraints(newMinMIPLevel, newMaxMIPLevel);
+    // Avoid firing this.changed.dispatch twice
+    this.dispatchOff = true;
     this.minMIPLevel.restoreState(newMinMIPLevel);
+    this.dispatchOff = false;
     this.maxMIPLevel.restoreState(newMaxMIPLevel);
   }
 
   private handleMIPLevelChanged(minLevelWasChanged: boolean) {
-    verifyInt(this.numberLevels);
-    if (this.maybeAdjustConstraints(minLevelWasChanged)) {
-      this.verifyValidConstraints(this.minMIPLevel.value, this.maxMIPLevel.value);
-      this.changed.dispatch();
+    if (!this.dispatchOff) {
+      // If maybeAdjustConstraints returns true, then the other constraint
+      // will be changed, and handleMIPLevelChanged will fire again.
+      // Either way, this.changed.dispatch will fire once.
+      if (!this.maybeAdjustConstraints(minLevelWasChanged)) {
+        this.verifyValidConstraints(this.minMIPLevel.value, this.maxMIPLevel.value);
+        this.changed.dispatch();
+      }
     }
   }
 
   // De facto min MIP level is 0 if not specified
-  public getDeFactoMinMIPLevel = () => {
-    const {minMIPLevel: {value}, numberLevels} = this;
-    verifyNonnegativeInt(numberLevels);
-    return (value !== undefined) ? value : 0;
-  }
+  public getDeFactoMinMIPLevel =
+      () => {
+        const {minMIPLevel: {value}, numberLevels} = this;
+        verifyNonnegativeInt(numberLevels);
+        return (value !== undefined) ? value : 0;
+      }
 
   // De facto max MIP level is numberLevels - 1 if not specified
-  public getDeFactoMaxMIPLevel = () => {
-    const {maxMIPLevel: {value}, numberLevels} = this;
-    verifyNonnegativeInt(numberLevels);
-    return (value !== undefined) ? value : numberLevels! - 1;
-  }
+  public getDeFactoMaxMIPLevel =
+      () => {
+        const {maxMIPLevel: {value}, numberLevels} = this;
+        verifyNonnegativeInt(numberLevels);
+        return (value !== undefined) ? value : numberLevels! - 1;
+      }
 
   // Only set the number of levels once either in constructor or after the renderLayer has been
   // initialized and sources have been retrieved.
@@ -68,7 +79,7 @@ export class TrackableMIPLevelConstraints extends RefCounted {
 
   private verifyValidConstraints(
       minMIPLevelValue: number|undefined, maxMIPLevelValue: number|undefined) {
-    if (minMIPLevelValue && maxMIPLevelValue) {
+    if (minMIPLevelValue !== undefined && maxMIPLevelValue !== undefined) {
       // Should never happen
       if (minMIPLevelValue > maxMIPLevelValue) {
         throw new Error('Specified minMIPLevel cannot be greater than specified maxMIPLevel');
@@ -82,7 +93,7 @@ export class TrackableMIPLevelConstraints extends RefCounted {
   // Ensure that minMIPLevelRendered <= maxMIPLevelRendered when one is adjusted by widget. Return
   // true/false to only kick off changed dispatch once when levels are adjusted.
   private maybeAdjustConstraints(minLevelWasChanged: boolean): boolean {
-    if (this.minMIPLevel.value && this.maxMIPLevel.value &&
+    if (this.minMIPLevel.value !== undefined && this.maxMIPLevel.value !== undefined &&
         this.minMIPLevel.value > this.maxMIPLevel.value) {
       // Invalid levels so adjust
       if (minLevelWasChanged) {
@@ -90,8 +101,8 @@ export class TrackableMIPLevelConstraints extends RefCounted {
       } else {
         this.minMIPLevel.value = this.maxMIPLevel.value;
       }
-      return false;
+      return true;
     }
-    return true;
+    return false;
   }
 }
