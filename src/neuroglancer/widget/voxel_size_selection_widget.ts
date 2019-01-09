@@ -1,8 +1,9 @@
+import './voxel_size_selection_widget.css';
+
 import {TrackableMIPLevelConstraints} from 'neuroglancer/trackable_mip_level_constraints';
 import {RefCounted} from 'neuroglancer/util/disposable';
 import {removeFromParent} from 'neuroglancer/util/dom';
 import {vec3} from 'neuroglancer/util/geom';
-import './voxel_size_selection_widget.css';
 
 export class VoxelSizeSelectionWidget extends RefCounted {
   element = document.createElement('div');
@@ -13,7 +14,7 @@ export class VoxelSizeSelectionWidget extends RefCounted {
   constructor(public mipLevelConstraints: TrackableMIPLevelConstraints) {
     super();
     const header = document.createElement('div');
-    header.textContent = 'Voxel size limits (nm)';
+    header.textContent = 'Voxel size limits (nm) desired';
     this.element.appendChild(header);
   }
 
@@ -46,6 +47,16 @@ export class VoxelSizeSelectionWidget extends RefCounted {
       maxVoxelSizeElement.appendChild(maxVoxelSizeDropdown);
       element.appendChild(minVoxelSizeElement);
       element.appendChild(maxVoxelSizeElement);
+      const actualLimitsHeader = document.createElement('div');
+      actualLimitsHeader.textContent = 'Voxel sizes loaded (nm)';
+      const actualLimitsTextboxElement = document.createElement('div');
+      const actualLimitsTextbox = document.createElement('textarea');
+      actualLimitsTextbox.readOnly = true;
+      actualLimitsTextbox.value = VoxelSizeSelectionWidget.getActualLimitsTextboxText(
+          mipLevelConstraints, voxelDropdownOptions);
+      element.appendChild(actualLimitsHeader);
+      actualLimitsTextboxElement.appendChild(actualLimitsTextbox);
+      element.appendChild(actualLimitsTextboxElement);
       this.registerDisposer(minMIPLevel.changed.add(() => {
         VoxelSizeSelectionWidget.setDropdownIndex(
             minVoxelSizeDropdown, mipLevelConstraints.getDeFactoMinMIPLevel());
@@ -54,8 +65,7 @@ export class VoxelSizeSelectionWidget extends RefCounted {
         VoxelSizeSelectionWidget.setDropdownIndex(
             maxVoxelSizeDropdown, mipLevelConstraints.getDeFactoMaxMIPLevel());
       }));
-    }
-    else {
+    } else {
       throw new Error('Attempt to load voxel sizes more than once');
     }
   }
@@ -105,6 +115,14 @@ export class VoxelSizeSelectionWidget extends RefCounted {
       dropdown.selectedIndex = newIndex;
     }
   }
+
+  private static getActualLimitsTextboxText(
+      mipLevelConstraints: TrackableMIPLevelConstraints,
+      voxelDropdownOptions: string[]) {
+        const minString = `Min voxel level loaded: ${voxelDropdownOptions[mipLevelConstraints.getDeFactoMinMIPLevel()]}`;
+        const maxString = `Max voxel level loaded: ${voxelDropdownOptions[mipLevelConstraints.getDeFactoMaxMIPLevel()]}`;
+        return minString + '\n' + maxString;
+      }
 
   disposed() {
     removeFromParent(this.element);

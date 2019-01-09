@@ -127,7 +127,7 @@ export interface RenderLayer {
   transform: CoordinateTransform;
   transformedSources: TransformedSource[][]|undefined;
   transformedSourcesGeneration: number;
-  mipLevelConstraints?: TrackableMIPLevelConstraints;
+  mipLevelConstraints: TrackableMIPLevelConstraints;
 }
 
 export function getTransformedSources(renderLayer: RenderLayer) {
@@ -326,8 +326,13 @@ export class SliceViewBase extends SharedObject {
       visibleSources.length = 0;
       const transformedSources = getTransformedSources(renderLayer);
       const numSources = transformedSources.length;
-      const minScaleIndex = renderLayer.mipLevelConstraints!.getDeFactoMinMIPLevel();
-      const maxScaleIndex = renderLayer.mipLevelConstraints!.getDeFactoMaxMIPLevel();
+      const {mipLevelConstraints} = renderLayer;
+      const {minScaleIndex, maxScaleIndex} = (mipLevelConstraints.numberLevels !== undefined) ?
+          {
+            minScaleIndex: mipLevelConstraints.getDeFactoMinMIPLevel(),
+            maxScaleIndex: mipLevelConstraints.getDeFactoMaxMIPLevel()
+          } :
+          {minScaleIndex: 0, maxScaleIndex: numSources - 1};
       let scaleIndex: number;
 
       // At the smallest scale, all alternative sources must have the same voxel size, which is
