@@ -132,7 +132,7 @@ registerRPC(SLICEVIEW_UPDATE_VIEW_RPC_ID, function(x) {
     obj.setViewportSize(x.width, x.height);
   }
   if (x.viewportToData) {
-    obj.setViewportToDataMatrix(x.viewportToData);
+    obj.setViewportToDataMatrix(x.viewportToData, x.voxelSize);
   }
 });
 registerRPC(SLICEVIEW_ADD_VISIBLE_LAYER_RPC_ID, function(x) {

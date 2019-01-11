@@ -29,6 +29,10 @@ export {DATA_TYPE_BYTES, DataType};
 const DEBUG_CHUNK_INTERSECTIONS = false;
 const DEBUG_VISIBLE_SOURCES = false;
 
+const WIDTH_MULTIPLIER = 1.2;
+const HEIGHT_MULTIPLIER = 1.2;
+const ADDITIONAL_DEPTH_MULTIPLIER = 1;
+
 const tempVec3 = vec3.create();
 
 /**
@@ -202,6 +206,9 @@ export class SliceViewBase extends SharedObject {
   // to data coordinates.
   viewportToData = mat4.create();
 
+  // voxelSize from navigation state, used by backend to prefetch chunks that are close by
+  voxelSize = vec3.create();
+
   // Normalized x, y, and z viewport axes in data coordinate space.
   viewportAxes = [vec3.create(), vec3.create(), vec3.create()];
 
@@ -255,7 +262,8 @@ export class SliceViewBase extends SharedObject {
     }
     return false;
   }
-  setViewportToDataMatrix(mat: mat4) {
+  setViewportToDataMatrix(mat: mat4, voxelSize: vec3) {
+    vec3.copy(this.voxelSize, voxelSize);
     if (this.hasViewportToData && mat4.equals(this.viewportToData, mat)) {
       return false;
     }
@@ -308,7 +316,7 @@ export class SliceViewBase extends SharedObject {
 
   /**
    * Computes the list of sources to use for each visible layer, based on the
-   * current pixelSize, and the user specified integers minMIPLevelRendered and maxMIPLevelRendered.
+   * current pixelSize, and the user specified integers minMIPLevel and maxMIPLevel.
    */
   updateVisibleSources() {
     if (!this.visibleSourcesStale) {
@@ -402,25 +410,94 @@ export class SliceViewBase extends SharedObject {
       visibleSources.reverse();
     }
   }
+
+  computeVisibleAndPrefetchChunks<T>(
+      getLayoutObject: (chunkLayout: ChunkLayout) => T,
+      addChunk:
+          (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
+           fullyVisibleSources: SliceViewChunkSource[]) => void,
+      addPrefetchChunk:
+          (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
+           fullyVisibleSources: SliceViewChunkSource[]) => void) {
+    this.updateVisibleSources();
+    const visibleCorners = tempCorners;
+    this.computeGlobalCorners(visibleCorners);
+    const prefetchCorners = [vec3.create(), vec3.create(), vec3.create(), vec3.create()];
+    this.computeGlobalCorners(prefetchCorners, WIDTH_MULTIPLIER, HEIGHT_MULTIPLIER);
+    const centerDataPosition = vec3.clone(this.centerDataPosition);
+
+    const computePrefetchChunksInPlane = () => {
+      function setCenterDataPosition(rectangleCorners: vec3[]) {}
+      const currentPrefetchRectangleCorners =
+          [vec3.create(), vec3.create(), vec3.create(), vec3.create()];
+      setCenterDataPosition(currentPrefetchRectangleCorners);
+      this.computeChunksFromCorners(
+          getLayoutObject, addPrefetchChunk, currentPrefetchRectangleCorners, centerDataPosition);
+    };
+
+    computePrefetchChunksInPlane();
+
+    const moveVertexAlongPlaneNormal = (outVertex: vec3, inVertex: vec3) => {
+      vec3.add(outVertex, inVertex, tempVec3);
+    };
+
+    vec3.multiply(tempVec3, this.voxelSize, this.viewportAxes[2]);
+    vec3.scale(tempVec3, tempVec3, ADDITIONAL_DEPTH_MULTIPLIER);
+    for (let i = 0; i < 4; ++i) {
+      moveVertexAlongPlaneNormal(prefetchCorners[i], visibleCorners[i]);
+    }
+    moveVertexAlongPlaneNormal(centerDataPosition, this.centerDataPosition);
+    this.computeChunksFromCorners(
+        getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+
+    this.computeChunksFromCorners(
+        getLayoutObject, addChunk, visibleCorners, this.centerDataPosition);
+  }
+
   computeVisibleChunks<T>(
       getLayoutObject: (chunkLayout: ChunkLayout) => T,
       addChunk:
           (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
            fullyVisibleSources: SliceViewChunkSource[]) => void) {
     this.updateVisibleSources();
+    const visibleCorners = tempCorners;
+    this.computeGlobalCorners(visibleCorners);
+    this.computeChunksFromCorners(
+        getLayoutObject, addChunk, visibleCorners, this.centerDataPosition);
+  }
 
-    // Lower and upper bound in global data coordinates.
-    const globalCorners = tempCorners;
-    let {width, height, viewportToData} = this;
+  private computeGlobalCorners(globalCorners: vec3[], widthMultiplier = 1, heightMultiplier = 1) {
+    const {viewportToData} = this;
     for (let i = 0; i < 3; ++i) {
-      globalCorners[0][i] = -kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
-      globalCorners[1][i] = -kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
-      globalCorners[2][i] = kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
-      globalCorners[3][i] = kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
+      globalCorners[0][i] = -kAxes[0][i] * widthMultiplier / 2 - kAxes[1][i] * heightMultiplier / 2;
+      globalCorners[1][i] = -kAxes[0][i] * widthMultiplier / 2 + kAxes[1][i] * heightMultiplier / 2;
+      globalCorners[2][i] = kAxes[0][i] * widthMultiplier / 2 - kAxes[1][i] * heightMultiplier / 2;
+      globalCorners[3][i] = kAxes[0][i] * widthMultiplier / 2 + kAxes[1][i] * heightMultiplier / 2;
     }
     for (let i = 0; i < 4; ++i) {
       vec3.transformMat4(globalCorners[i], globalCorners[i], viewportToData);
     }
+  }
+
+  private computeChunksFromCorners<T>(
+      getLayoutObject: (chunkLayout: ChunkLayout) => T,
+      addChunk:
+          (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
+           fullyVisibleSources: SliceViewChunkSource[]) => void,
+      globalCorners: vec3[], centerDataPosition: vec3) {
+
+    // Lower and upper bound in global data coordinates.
+    // const globalCorners = tempCorners;
+    // let {width, height, viewportToData} = this;
+    // for (let i = 0; i < 3; ++i) {
+    //   globalCorners[0][i] = -kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
+    //   globalCorners[1][i] = -kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
+    //   globalCorners[2][i] = kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
+    //   globalCorners[3][i] = kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
+    // }
+    // for (let i = 0; i < 4; ++i) {
+    //   vec3.transformMat4(globalCorners[i], globalCorners[i], viewportToData);
+    // }
     // console.log("data bounds", dataLowerBound, dataUpperBound);
 
     // These variables hold the lower and upper bounds on chunk grid positions that intersect the
@@ -466,7 +543,7 @@ export class SliceViewBase extends SharedObject {
 
       // Center position in chunk grid coordinates.
       const planeDistanceToOrigin =
-          vec3.dot(chunkLayout.globalToLocalGrid(tempVec3, this.centerDataPosition), planeNormal);
+          vec3.dot(chunkLayout.globalToLocalGrid(tempVec3, centerDataPosition), planeNormal);
 
       for (let i = 0; i < 4; ++i) {
         const localCorner = chunkLayout.globalToLocalGrid(tempVec3, globalCorners[i]);
