@@ -92,7 +92,23 @@ export class SliceView extends SliceViewIntermediateBase {
             basePriority + priority + SCALE_PRIORITY_MULTIPLIER * priorityIndex);
       }
     }
-    this.computeVisibleChunks(getLayoutObject, addChunk);
+
+    function addPrefetchChunk(
+      chunkLayout: ChunkLayout, sources: Map<SliceViewChunkSource, number>,
+      positionInChunks: vec3, visibleSources: SliceViewChunkSource[]) {
+      vec3.multiply(tempChunkPosition, positionInChunks, chunkLayout.size);
+      let priority = -vec3.distance(localCenter, tempChunkPosition);
+      for (let source of visibleSources) {
+        let priorityIndex = sources.get(source)!;
+        let chunk = source.getChunk(positionInChunks);
+        chunkManager.requestChunk(
+          chunk, priorityTier+1,
+          basePriority + priority + SCALE_PRIORITY_MULTIPLIER * priorityIndex);
+      }
+    }
+
+    // this.computeVisibleChunks(getLayoutObject, addChunk);
+    this.computeVisibleAndPrefetchChunks(getLayoutObject, addChunk, addPrefetchChunk);
   }
 
   removeVisibleLayer(layer: RenderLayer) {

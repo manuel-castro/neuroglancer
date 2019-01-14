@@ -29,9 +29,10 @@ export {DATA_TYPE_BYTES, DataType};
 const DEBUG_CHUNK_INTERSECTIONS = false;
 const DEBUG_VISIBLE_SOURCES = false;
 
-const WIDTH_MULTIPLIER = 1.2;
-const HEIGHT_MULTIPLIER = 1.2;
-const ADDITIONAL_DEPTH_MULTIPLIER = 1;
+const ADDITIONAL_WIDTH_VOXELS = 1;
+const ADDITIONAL_HEIGHT_VOXELS = 1;
+const ADDITIONAL_DEPTH_VOXELS = 1;
+const PREFETCH_PARAMETERS = [ADDITIONAL_WIDTH_VOXELS, ADDITIONAL_HEIGHT_VOXELS, ADDITIONAL_DEPTH_VOXELS];
 
 const tempVec3 = vec3.create();
 
@@ -411,6 +412,9 @@ export class SliceViewBase extends SharedObject {
     }
   }
 
+  // Prefetch chunks are defined by the constants ADDITIONAL_WIDTH_VOXELS, ADDITIONAL_HEIGHT_VOXELS,
+  // ADDITIONAL_DEPTH_VOXELS in PREFETCH_PARAMETERS. These specify how many voxels in each direction
+  // outside of the visual viewport the backend should request chunks for, if prefetching is turned on.
   computeVisibleAndPrefetchChunks<T>(
       getLayoutObject: (chunkLayout: ChunkLayout) => T,
       addChunk:
@@ -419,86 +423,136 @@ export class SliceViewBase extends SharedObject {
       addPrefetchChunk:
           (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
            fullyVisibleSources: SliceViewChunkSource[]) => void) {
-    this.updateVisibleSources();
+    const {computeChunksFromGlobalCorners, voxelSize, viewportAxes} = this;
     const visibleCorners = tempCorners;
-    this.computeGlobalCorners(visibleCorners);
+    this.computeVisibleChunks(getLayoutObject, addChunk, visibleCorners);
+
     const prefetchCorners = [vec3.create(), vec3.create(), vec3.create(), vec3.create()];
-    this.computeGlobalCorners(prefetchCorners, WIDTH_MULTIPLIER, HEIGHT_MULTIPLIER);
-    const centerDataPosition = vec3.clone(this.centerDataPosition);
-
-    const computePrefetchChunksInPlane = () => {
-      function setCenterDataPosition(rectangleCorners: vec3[]) {}
-      const currentPrefetchRectangleCorners =
-          [vec3.create(), vec3.create(), vec3.create(), vec3.create()];
-      setCenterDataPosition(currentPrefetchRectangleCorners);
-      this.computeChunksFromCorners(
-          getLayoutObject, addPrefetchChunk, currentPrefetchRectangleCorners, centerDataPosition);
-    };
-
-    computePrefetchChunksInPlane();
-
-    const moveVertexAlongPlaneNormal = (outVertex: vec3, inVertex: vec3) => {
-      vec3.add(outVertex, inVertex, tempVec3);
-    };
-
-    vec3.multiply(tempVec3, this.voxelSize, this.viewportAxes[2]);
-    vec3.scale(tempVec3, tempVec3, ADDITIONAL_DEPTH_MULTIPLIER);
-    for (let i = 0; i < 4; ++i) {
-      moveVertexAlongPlaneNormal(prefetchCorners[i], visibleCorners[i]);
+    const centerDataPosition = vec3.create();
+    // axisNudges contains 3 vectors that when added to a vertex translate it along the
+    // viewport's x-axis, y-axis, and plane normal respectively.
+    const axisNudges: vec3[] = [];
+    for (let i = 0; i < 3; ++i) {
+      const axisNudge = vec3.create();
+      vec3.multiply(axisNudge, voxelSize, viewportAxes[i]);
+      vec3.scale(axisNudge, axisNudge, PREFETCH_PARAMETERS[i]);
+      axisNudges.push(axisNudge);
     }
-    moveVertexAlongPlaneNormal(centerDataPosition, this.centerDataPosition);
-    this.computeChunksFromCorners(
-        getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
 
-    this.computeChunksFromCorners(
-        getLayoutObject, addChunk, visibleCorners, this.centerDataPosition);
+    const setCenterDataPosition = (rectangleCorners: vec3[]) => {
+      vec3.copy(centerDataPosition, rectangleCorners[0]);
+      for (let i = 1; i < 4; ++i) {
+        vec3.add(centerDataPosition, centerDataPosition, rectangleCorners[1]);
+      }
+      vec3.scale(centerDataPosition, centerDataPosition, 0.25);
+    };
+
+    const moveVertex =
+        (vertexOut: vec3, vertexIn: vec3, movementPerAxis: [number, number, number]) => {
+          for (let i = 0; i < 3; ++i) {
+            vec3.scale(tempVec3, axisNudges[i], movementPerAxis[i]);
+            const runningSum = (i > 0) ? vertexOut : vertexIn;
+            vec3.add(vertexOut, runningSum, tempVec3);
+          }
+        };
+
+    // Instruction to move a visualCorner vertex to create a prefetch corner
+    // Instruction can be read as [visualCornerIndex, widthAxisMovement, heightAxisMovement,
+    // depthAxisMovement]
+    type CornerInstruction = [number, number, number, number];
+    type CornerInstructions =
+        [CornerInstruction, CornerInstruction, CornerInstruction, CornerInstruction];
+    const computePrefetchRectangleChunks = (cornerInstructions: CornerInstructions) => {
+      const unpackInstruction = (instruction: CornerInstruction): [number, number, number] => {
+        return [instruction[1], instruction[2], instruction[3]];
+      };
+      for (let i = 0; i < 4; ++i) {
+        moveVertex(
+            prefetchCorners[i], visibleCorners[cornerInstructions[i][0]],
+            unpackInstruction(cornerInstructions[i]));
+      }
+      setCenterDataPosition(prefetchCorners);
+      computeChunksFromGlobalCorners(
+          getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+    };
+
+    const computePrefetchChunksWithinPlane = () => {
+      const leftRectangleInstructions: CornerInstructions =
+          [[0, -1, -1, 0], [1, -1, 1, 0], [0, 0, -1, 0], [1, 0, 1, 0]];
+      computePrefetchRectangleChunks(leftRectangleInstructions);
+      const rightRectangleInstructions: CornerInstructions =
+          [[2, 0, -1, 0], [3, 0, 1, 0], [2, 1, -1, 0], [3, 1, 1, 0]];
+      computePrefetchRectangleChunks(rightRectangleInstructions);
+      const upRectangleInstructions: CornerInstructions =
+          [[1, 0, 0, 0], [1, 0, 1, 0], [3, 0, 0, 0], [3, 0, 1, 0]];
+      computePrefetchRectangleChunks(upRectangleInstructions);
+      const downRectangleInstructions: CornerInstructions =
+          [[0, 0, -1, 0], [0, 0, 0, 0], [2, 0, -1, 0], [2, 0, 0, 0]];
+      computePrefetchRectangleChunks(downRectangleInstructions);
+    };
+
+
+    const computePrefetchChunksOutsidePlane = () => {
+      // Move corners and center along plane normal in one direction
+      for (let i = 0; i < 4; ++i) {
+        moveVertex(prefetchCorners[i], visibleCorners[i], [0, 0, 1]);
+      }
+      moveVertex(centerDataPosition, this.centerDataPosition, [0, 0, 1]);
+      computeChunksFromGlobalCorners(
+          getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+
+      // Move corners and center along plane normal in one direction
+      for (let i = 0; i < 4; ++i) {
+        moveVertex(prefetchCorners[i], visibleCorners[i], [0, 0, -1]);
+      }
+      moveVertex(centerDataPosition, this.centerDataPosition, [0, 0, -1]);
+      computeChunksFromGlobalCorners(
+          getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+    };
+
+    computePrefetchChunksWithinPlane();
+    computePrefetchChunksOutsidePlane();
   }
 
   computeVisibleChunks<T>(
       getLayoutObject: (chunkLayout: ChunkLayout) => T,
       addChunk:
           (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
-           fullyVisibleSources: SliceViewChunkSource[]) => void) {
+           fullyVisibleSources: SliceViewChunkSource[]) => void,
+      cornersOut?: vec3[]) {
     this.updateVisibleSources();
     const visibleCorners = tempCorners;
     this.computeGlobalCorners(visibleCorners);
-    this.computeChunksFromCorners(
+    this.computeChunksFromGlobalCorners(
         getLayoutObject, addChunk, visibleCorners, this.centerDataPosition);
+    if (cornersOut) {
+      cornersOut = visibleCorners;
+    }
   }
 
-  private computeGlobalCorners(globalCorners: vec3[], widthMultiplier = 1, heightMultiplier = 1) {
-    const {viewportToData} = this;
+  // Used to get global coordinates of viewport corners. These corners
+  // are used to find chunks within these corners in computeChunksFromGlobalCorners. The order of
+  // these corners are relevant in computePrefetchChunksWithinPlane to construct the corners of
+  // prefetch rectangles.
+  private computeGlobalCorners(globalCorners: vec3[]) {
+    const {viewportToData, width, height} = this;
     for (let i = 0; i < 3; ++i) {
-      globalCorners[0][i] = -kAxes[0][i] * widthMultiplier / 2 - kAxes[1][i] * heightMultiplier / 2;
-      globalCorners[1][i] = -kAxes[0][i] * widthMultiplier / 2 + kAxes[1][i] * heightMultiplier / 2;
-      globalCorners[2][i] = kAxes[0][i] * widthMultiplier / 2 - kAxes[1][i] * heightMultiplier / 2;
-      globalCorners[3][i] = kAxes[0][i] * widthMultiplier / 2 + kAxes[1][i] * heightMultiplier / 2;
+      globalCorners[0][i] = -kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
+      globalCorners[1][i] = -kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
+      globalCorners[2][i] = kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
+      globalCorners[3][i] = kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
     }
     for (let i = 0; i < 4; ++i) {
       vec3.transformMat4(globalCorners[i], globalCorners[i], viewportToData);
     }
   }
 
-  private computeChunksFromCorners<T>(
+  private computeChunksFromGlobalCorners<T>(
       getLayoutObject: (chunkLayout: ChunkLayout) => T,
       addChunk:
           (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
            fullyVisibleSources: SliceViewChunkSource[]) => void,
       globalCorners: vec3[], centerDataPosition: vec3) {
-
-    // Lower and upper bound in global data coordinates.
-    // const globalCorners = tempCorners;
-    // let {width, height, viewportToData} = this;
-    // for (let i = 0; i < 3; ++i) {
-    //   globalCorners[0][i] = -kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
-    //   globalCorners[1][i] = -kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
-    //   globalCorners[2][i] = kAxes[0][i] * width / 2 - kAxes[1][i] * height / 2;
-    //   globalCorners[3][i] = kAxes[0][i] * width / 2 + kAxes[1][i] * height / 2;
-    // }
-    // for (let i = 0; i < 4; ++i) {
-    //   vec3.transformMat4(globalCorners[i], globalCorners[i], viewportToData);
-    // }
-    // console.log("data bounds", dataLowerBound, dataUpperBound);
 
     // These variables hold the lower and upper bounds on chunk grid positions that intersect the
     // viewing plane.
