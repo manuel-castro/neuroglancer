@@ -23,6 +23,7 @@ import {NullarySignal} from 'neuroglancer/util/signal';
 import {getBasePriority, getPriorityTier, withSharedVisibility} from 'neuroglancer/visibility_priority/backend';
 import {registerRPC, registerSharedObject, RPC, SharedObjectCounterpart} from 'neuroglancer/worker_rpc';
 import {TrackableMIPLevelConstraints} from 'neuroglancer/trackable_mip_level_constraints';
+import { ChunkPriorityTier } from '../chunk_manager/base';
 
 const BASE_PRIORITY = -1e12;
 const SCALE_PRIORITY_MULTIPLIER = 1e9;
@@ -30,6 +31,12 @@ const SCALE_PRIORITY_MULTIPLIER = 1e9;
 // Temporary values used by SliceView.updateVisibleChunk
 const tempChunkPosition = vec3.create();
 const tempCenter = vec3.create();
+
+const PREFETCH_WIDTH_MULTIPLIER = 1.5;
+const PREFETCH_HEIGHT_MULTIPLIER = 1.5;
+// const ADDITIONAL_HEIGHT_VOXELS = 1200;
+const ADDITIONAL_DEPTH_VOXELS = 1;
+// const PREFETCH_PARAMETERS = [ADDITIONAL_WIDTH_VOXELS, ADDITIONAL_HEIGHT_VOXELS, ADDITIONAL_DEPTH_VOXELS];
 
 class SliceViewCounterpartBase extends SliceViewBase {
   constructor(rpc: RPC, options: any) {
@@ -68,7 +75,8 @@ export class SliceView extends SliceViewIntermediateBase {
       return;
     }
 
-    const priorityTier = getPriorityTier(visibility);
+    const sliceViewPriorityTier = getPriorityTier(visibility);
+    const prechunkPriorityTier = getPriorityTier(Number.NEGATIVE_INFINITY);
     let basePriority = getBasePriority(visibility);
     basePriority += BASE_PRIORITY;
 
@@ -79,36 +87,24 @@ export class SliceView extends SliceViewIntermediateBase {
       return this.visibleChunkLayouts.get(chunkLayout);
     };
 
-    function addChunk(
-        chunkLayout: ChunkLayout, sources: Map<SliceViewChunkSource, number>,
-        positionInChunks: vec3, visibleSources: SliceViewChunkSource[]) {
-      vec3.multiply(tempChunkPosition, positionInChunks, chunkLayout.size);
-      let priority = -vec3.distance(localCenter, tempChunkPosition);
-      for (let source of visibleSources) {
-        let priorityIndex = sources.get(source)!;
-        let chunk = source.getChunk(positionInChunks);
-        chunkManager.requestChunk(
-            chunk, priorityTier,
-            basePriority + priority + SCALE_PRIORITY_MULTIPLIER * priorityIndex);
-      }
+    function addChunk(priorityTier: ChunkPriorityTier) {
+      return (chunkLayout: ChunkLayout, sources: Map<SliceViewChunkSource, number>,
+              positionInChunks: vec3, visibleSources: SliceViewChunkSource[]) => {
+        vec3.multiply(tempChunkPosition, positionInChunks, chunkLayout.size);
+        let priority = -vec3.distance(localCenter, tempChunkPosition);
+        for (let source of visibleSources) {
+          let priorityIndex = sources.get(source)!;
+          let chunk = source.getChunk(positionInChunks);
+          chunkManager.requestChunk(
+              chunk, priorityTier,
+              basePriority + priority + SCALE_PRIORITY_MULTIPLIER * priorityIndex);
+        }
+      };
     }
 
-    function addPrefetchChunk(
-      chunkLayout: ChunkLayout, sources: Map<SliceViewChunkSource, number>,
-      positionInChunks: vec3, visibleSources: SliceViewChunkSource[]) {
-      vec3.multiply(tempChunkPosition, positionInChunks, chunkLayout.size);
-      let priority = -vec3.distance(localCenter, tempChunkPosition);
-      for (let source of visibleSources) {
-        let priorityIndex = sources.get(source)!;
-        let chunk = source.getChunk(positionInChunks);
-        chunkManager.requestChunk(
-          chunk, priorityTier+1,
-          basePriority + priority + SCALE_PRIORITY_MULTIPLIER * priorityIndex);
-      }
-    }
-
-    // this.computeVisibleChunks(getLayoutObject, addChunk);
-    this.computeVisibleAndPrefetchChunks(getLayoutObject, addChunk, addPrefetchChunk);
+    this.computeVisibleAndPrefetchChunks(
+        getLayoutObject, addChunk.call(null, sliceViewPriorityTier),
+        addChunk.call(null, prechunkPriorityTier));
   }
 
   removeVisibleLayer(layer: RenderLayer) {
@@ -125,6 +121,109 @@ export class SliceView extends SliceViewIntermediateBase {
     layer.transform.changed.add(this.invalidateVisibleSources);
     layer.mipLevelConstraints.changed.add(this.invalidateVisibleSources);
     this.invalidateVisibleSources();
+  }
+
+  // Prefetch chunks are defined by the constants ADDITIONAL_WIDTH_VOXELS, ADDITIONAL_HEIGHT_VOXELS,
+  // ADDITIONAL_DEPTH_VOXELS in PREFETCH_PARAMETERS. These specify how many voxels in each direction
+  // outside of the visual viewport the backend should request chunks for, if prefetching is turned on.
+  computeVisibleAndPrefetchChunks<T>(
+    getLayoutObject: (chunkLayout: ChunkLayout) => T,
+    addChunk:
+        (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
+         fullyVisibleSources: SliceViewChunkSource[]) => void,
+    addPrefetchChunk:
+        (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
+         fullyVisibleSources: SliceViewChunkSource[]) => void) {
+    const {voxelSize, viewportAxes} = this;
+    const visibleCorners = [vec3.create(), vec3.create(), vec3.create(), vec3.create()];
+    const tempVec3 = vec3.create();
+    this.computeVisibleChunks(getLayoutObject, addChunk, visibleCorners);
+
+    const prefetchCorners = [vec3.create(), vec3.create(), vec3.create(), vec3.create()];
+    const centerDataPosition = vec3.create();
+    // axisNudges contains 3 vectors that when added to a vertex translate it along the
+    // viewport's x-axis, y-axis, and plane normal respectively.
+    const axisNudges: vec3[] = [];
+    for (let i = 0; i < 3; ++i) {
+      const axisNudge = vec3.create();
+      vec3.multiply(axisNudge, voxelSize, viewportAxes[i]);
+      vec3.scale(axisNudge, axisNudge, PREFETCH_PARAMETERS[i]);
+      axisNudges.push(axisNudge);
+    }
+
+    const setCenterDataPosition = (rectangleCorners: vec3[]) => {
+      vec3.copy(centerDataPosition, rectangleCorners[0]);
+      for (let i = 1; i < 4; ++i) {
+        vec3.add(centerDataPosition, centerDataPosition, rectangleCorners[i]);
+      }
+      vec3.scale(centerDataPosition, centerDataPosition, 0.25);
+    };
+
+    const moveVertex =
+        (vertexOut: vec3, vertexIn: vec3, movementPerAxis: [number, number, number]) => {
+          for (let i = 0; i < 3; ++i) {
+            vec3.scale(tempVec3, axisNudges[i], movementPerAxis[i]);
+            const runningSum = (i > 0) ? vertexOut : vertexIn;
+            vec3.add(vertexOut, runningSum, tempVec3);
+          }
+        };
+
+    // Instruction to move a visualCorner vertex to create a prefetch corner
+    // Instruction can be read as [visualCornerIndex, widthAxisMovement, heightAxisMovement,
+    // depthAxisMovement]
+    type CornerInstruction = [number, number, number, number];
+    type CornerInstructions =
+        [CornerInstruction, CornerInstruction, CornerInstruction, CornerInstruction];
+    const computePrefetchRectangleChunks = (cornerInstructions: CornerInstructions) => {
+      const unpackInstruction = (instruction: CornerInstruction): [number, number, number] => {
+        return [instruction[1], instruction[2], instruction[3]];
+      };
+      for (let i = 0; i < 4; ++i) {
+        moveVertex(
+            prefetchCorners[i], visibleCorners[cornerInstructions[i][0]],
+            unpackInstruction(cornerInstructions[i]));
+      }
+      setCenterDataPosition(prefetchCorners);
+      this.computeChunksFromGlobalCorners(
+          getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+    };
+
+    const computePrefetchChunksWithinPlane = () => {
+      const leftRectangleInstructions: CornerInstructions =
+          [[0, -1, -1, 0], [1, -1, 1, 0], [0, 0, -1, 0], [1, 0, 1, 0]];
+      computePrefetchRectangleChunks(leftRectangleInstructions);
+      const rightRectangleInstructions: CornerInstructions =
+          [[2, 0, -1, 0], [3, 0, 1, 0], [2, 1, -1, 0], [3, 1, 1, 0]];
+      computePrefetchRectangleChunks(rightRectangleInstructions);
+      const upRectangleInstructions: CornerInstructions =
+          [[1, 0, 0, 0], [1, 0, 1, 0], [3, 0, 0, 0], [3, 0, 1, 0]];
+      computePrefetchRectangleChunks(upRectangleInstructions);
+      const downRectangleInstructions: CornerInstructions =
+          [[0, 0, -1, 0], [0, 0, 0, 0], [2, 0, -1, 0], [2, 0, 0, 0]];
+      computePrefetchRectangleChunks(downRectangleInstructions);
+    };
+
+
+    const computePrefetchChunksOutsidePlane = () => {
+      // Move corners and center along plane normal in one direction
+      for (let i = 0; i < 4; ++i) {
+        moveVertex(prefetchCorners[i], visibleCorners[i], [0, 0, 1]);
+      }
+      moveVertex(centerDataPosition, this.centerDataPosition, [0, 0, 1]);
+      this.computeChunksFromGlobalCorners(
+          getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+
+      // Move corners and center along plane normal in one direction
+      for (let i = 0; i < 4; ++i) {
+        moveVertex(prefetchCorners[i], visibleCorners[i], [0, 0, -1]);
+      }
+      moveVertex(centerDataPosition, this.centerDataPosition, [0, 0, -1]);
+      this.computeChunksFromGlobalCorners(
+          getLayoutObject, addPrefetchChunk, prefetchCorners, centerDataPosition);
+    };
+
+    computePrefetchChunksWithinPlane();
+    computePrefetchChunksOutsidePlane();
   }
 
   disposed() {
