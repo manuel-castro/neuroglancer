@@ -414,7 +414,7 @@ export class SliceViewBase extends SharedObject {
            fullyVisibleSources: SliceViewChunkSource[]) => void,
       cornersOut?: vec3[]) {
     this.updateVisibleSources();
-    const visibleCorners = (cornersOut)? cornersOut: tempCorners;
+    const visibleCorners = (cornersOut) ? cornersOut: tempCorners;
     this.computeGlobalCorners(visibleCorners);
     this.computeChunksFromGlobalCorners(
         getLayoutObject, addChunk, visibleCorners, this.centerDataPosition);
@@ -422,9 +422,9 @@ export class SliceViewBase extends SharedObject {
 
   // Used to get global coordinates of viewport corners. These corners
   // are used to find chunks within these corners in computeChunksFromGlobalCorners. The order of
-  // these corners are relevant in computePrefetchChunksWithinPlane in the backend to construct the corners of
+  // these corners are relevant in the backend in computePrefetchChunksWithinPlane to construct the corners of
   // prefetch rectangles.
-  protected computeGlobalCorners(globalCorners: vec3[], widthMultiplier = 1, heightMultiplier = 1) {
+  protected computeGlobalCorners = (globalCorners: vec3[], widthMultiplier = 1, heightMultiplier = 1) => {
     const {viewportToData, width, height} = this;
     const modifiedWidth = widthMultiplier * width;
     const modifiedHeight = heightMultiplier * height;
@@ -957,6 +957,7 @@ export const SLICEVIEW_RPC_ID = 'SliceView';
 export const SLICEVIEW_RENDERLAYER_RPC_ID = 'sliceview/RenderLayer';
 export const SLICEVIEW_ADD_VISIBLE_LAYER_RPC_ID = 'SliceView.addVisibleLayer';
 export const SLICEVIEW_REMOVE_VISIBLE_LAYER_RPC_ID = 'SliceView.removeVisibleLayer';
+export const SLICEVIEW_UPDATE_PREFETCHING_RPC_ID = 'SliceView.updatePrefetching';
 export const SLICEVIEW_UPDATE_VIEW_RPC_ID = 'SliceView.updateView';
 export const SLICEVIEW_RENDERLAYER_UPDATE_TRANSFORM_RPC_ID = 'SliceView.updateTransform';
 export const SLICEVIEW_RENDERLAYER_UPDATE_MIP_LEVEL_CONSTRAINTS_RPC_ID =
