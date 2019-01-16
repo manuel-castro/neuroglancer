@@ -159,18 +159,18 @@ export class SliceView extends SliceViewIntermediateBase {
     enum CornerType { INNER, OUTER }
     type CornerIndex = number;
     type CornerInstruction = [CornerType, CornerIndex];
-    type CornerInstructions =
+    type RectangleInstruction =
         [CornerInstruction, CornerInstruction, CornerInstruction, CornerInstruction];
-    const computePrefetchRectangleChunks = (cornerInstructions: CornerInstructions) => {
-      const currentRectangleCorners: vec3[] = [];
-      cornerInstructions.forEach(cornerInstruction => {
+    const computePrefetchRectangleChunks = (rectangleInstruction: RectangleInstruction) => {
+      const rectangleCorners: vec3[] = [];
+      rectangleInstruction.forEach(cornerInstruction => {
         const rectangleWithVertex =
-            (cornerInstruction[0] === CornerType.INNER) ? innerCorners : outerCorners;
-        currentRectangleCorners.push(rectangleWithVertex[cornerInstruction[1]]);
+          (cornerInstruction[0] === CornerType.INNER) ? innerCorners : outerCorners;
+        rectangleCorners.push(rectangleWithVertex[cornerInstruction[1]]);
       });
-      setCenterDataPosition(currentRectangleCorners);
+      setCenterDataPosition(rectangleCorners);
       this.computeChunksFromGlobalCorners(
-          getLayoutObject, addPrefetchChunk, currentRectangleCorners, centerDataPosition);
+          getLayoutObject, addPrefetchChunk, rectangleCorners, centerDataPosition);
     };
 
     const computePrefetchChunksWithinPlane = () => {

@@ -424,7 +424,7 @@ export class SliceViewBase extends SharedObject {
   // are used to find chunks within these corners in computeChunksFromGlobalCorners. The order of
   // these corners are relevant in the backend in computePrefetchChunksWithinPlane to construct the corners of
   // prefetch rectangles.
-  protected computeGlobalCorners = (globalCorners: vec3[], widthMultiplier = 1, heightMultiplier = 1) => {
+  computeGlobalCorners = (globalCorners: vec3[], widthMultiplier = 1, heightMultiplier = 1) => {
     const {viewportToData, width, height} = this;
     const modifiedWidth = widthMultiplier * width;
     const modifiedHeight = heightMultiplier * height;
@@ -439,7 +439,7 @@ export class SliceViewBase extends SharedObject {
     }
   }
 
-  protected computeChunksFromGlobalCorners<T>(
+  computeChunksFromGlobalCorners<T>(
       getLayoutObject: (chunkLayout: ChunkLayout) => T,
       addChunk:
           (chunkLayout: ChunkLayout, layoutObject: T, lowerBound: vec3,
