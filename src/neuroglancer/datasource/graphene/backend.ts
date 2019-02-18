@@ -16,7 +16,7 @@
 
 import {WithParameters} from 'neuroglancer/chunk_manager/backend';
 import {ChunkedGraphSourceParameters, MeshSourceParameters, SkeletonSourceParameters, VolumeChunkEncoding, VolumeChunkSourceParameters} from 'neuroglancer/datasource/graphene/base';
-import {decodeJsonManifestChunk, decodeTriangleVertexPositionsAndIndices, FragmentChunk, ManifestChunk, MeshSource} from 'neuroglancer/mesh/backend';
+import {decodeJsonManifestChunk, /*decodeTriangleVertexPositionsAndIndices,*/ decodeTriangleVertexPositionsAndIndicesDraco, FragmentChunk, ManifestChunk, MeshSource} from 'neuroglancer/mesh/backend';
 import {decodeSkeletonVertexPositionsAndIndices, SkeletonChunk, SkeletonSource} from 'neuroglancer/skeleton/backend';
 import {VertexAttributeInfo} from 'neuroglancer/skeleton/base';
 import {ChunkDecoder} from 'neuroglancer/sliceview/backend_chunk_decoders';
@@ -30,6 +30,8 @@ import {DATA_TYPE_BYTES} from 'neuroglancer/util/data_type';
 import {convertEndian16, convertEndian32, Endianness} from 'neuroglancer/util/endian';
 import {openShardedHttpRequest, sendHttpRequest} from 'neuroglancer/util/http_request';
 import {registerSharedObject} from 'neuroglancer/worker_rpc';
+
+
 
 const chunkDecoders = new Map<VolumeChunkEncoding, ChunkDecoder>();
 chunkDecoders.set(VolumeChunkEncoding.RAW, decodeRawChunk);
@@ -93,11 +95,103 @@ export function decodeManifestChunk(chunk: ManifestChunk, response: any) {
   return decodeJsonManifestChunk(chunk, response, 'fragments');
 }
 
+// function decodeDracoData(rawBuffer, decoder) {
+//   const buffer = new decoderModule.DecoderBuffer();
+//   buffer.Init(new Int8Array(rawBuffer), rawBuffer.byteLength);
+//   const geometryType = decoder.GetEncodedGeometryType(buffer);
+
+//   let dracoGeometry;
+//   let status;
+//   // if (geometryType === decoderModule.TRIANGULAR_MESH) {
+//   dracoGeometry = new decoderModule.Mesh();
+//   status = decoder.DecodeBufferToMesh(buffer, dracoGeometry);
+//   // } else if (geometryType === decoderModule.POINT_CLOUD) {
+//   //   dracoGeometry = new decoderModule.PointCloud();
+//   //   status = decoder.DecodeBufferToPointCloud(buffer, dracoGeometry);
+//   // } else {
+//   //   const errorMsg = 'Error: Unknown geometry type.';
+//   //   console.error(errorMsg);
+//   // }
+//   decoderModule.destroy(buffer);
+
+//   return dracoGeometry;
+// }
+
+// export function decodeFragmentChunk(chunk: FragmentChunk, response: ArrayBuffer) {
+//   let dv = new DataView(response);
+//   let numVertices = dv.getUint32(0, true);
+//   decodeTriangleVertexPositionsAndIndices(
+//     chunk, response, Endianness.LITTLE, /*vertexByteOffset=*/4, numVertices);
+// }
+
+
+// import * as fs from "fs";
+const draco3d = require('draco3d');
+const decoderModule = draco3d.createDecoderModule({});
 export function decodeFragmentChunk(chunk: FragmentChunk, response: ArrayBuffer) {
-  let dv = new DataView(response);
-  let numVertices = dv.getUint32(0, true);
-  decodeTriangleVertexPositionsAndIndices(
-      chunk, response, Endianness.LITTLE, /*vertexByteOffset=*/4, numVertices);
+  const startTime = Date.now();
+  const decoder = new decoderModule.Decoder();
+  const buffer = new decoderModule.DecoderBuffer();
+  buffer.Init(new Int8Array(response), response.byteLength);
+  console.log(`Setup time: ${Date.now() - startTime}`);
+  // const geometryType = decoder.GetEncodedGeometryType(buffer);
+  const mesh = new decoderModule.Mesh();
+  decoder.DecodeBufferToMesh(buffer, mesh);
+  console.log(`Time to decode: ${Date.now() - startTime}`);
+  decoderModule.destroy(buffer);
+  // const decodedGeometry = decodeDracoData(response, decoder);
+  const numFaces = mesh.num_faces();
+  const numIndices = numFaces * 3;
+  const numPoints = mesh.num_points();
+  const indices = new Uint32Array(numIndices);
+
+  // console.log("Number of faces " + numFaces);
+  // console.log("Number of vertices " + numPoints);
+
+  // Add Faces to mesh
+  const ia = new decoderModule.DracoInt32Array();
+  for (let i = 0; i < numFaces; ++i) {
+    decoder.GetFaceFromMesh(mesh, i, ia);
+    const index = i * 3;
+    indices[index] = ia.GetValue(0);
+    indices[index + 1] = ia.GetValue(1);
+    indices[index + 2] = ia.GetValue(2);
+  }
+  decoderModule.destroy(ia);
+
+  // const attrs = {POSITION: 3, NORMAL: 3, COLOR: 3, TEX_COORD: 2};
+
+  // Object.keys(attrs).forEach((attr) => {
+    // const stride = attrs.POSITION;
+  const stride = 3;
+  const numValues = numPoints * stride;
+  const decoderAttr = decoderModule.POSITION;
+  // const encoderAttr = encoderModule[attr];
+  const attrId = decoder.GetAttributeId(mesh, decoderAttr);
+
+  if (attrId < 0) {
+    console.log('attrId 0');
+    return;
+  }
+
+  // console.log("Adding %s attribute", attr);
+
+  const attribute = decoder.GetAttribute(mesh, attrId);
+  const attributeData = new decoderModule.DracoFloat32Array();
+  decoder.GetAttributeFloatForAllPoints(mesh, attribute, attributeData);
+
+  // assert(numValues === attributeData.size(), 'Wrong attribute size.');
+
+  const attributeDataArray = new Float32Array(numValues);
+  for (let i = 0; i < numValues; ++i) {
+    attributeDataArray[i] = attributeData.GetValue(i);
+  }
+
+  chunk.vertexPositions = attributeDataArray;
+  chunk.indices = indices;
+  const endTime = Date.now();
+  console.log(`Time: ${endTime - startTime}`);
+  decodeTriangleVertexPositionsAndIndicesDraco(chunk);
 }
 
 @registerSharedObject() export class GrapheneMeshSource extends

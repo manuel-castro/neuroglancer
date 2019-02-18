@@ -230,6 +230,59 @@ export function decodeVertexPositionsAndIndices(
   chunk.indices = indices;
 }
 
+// export function decodeVertexPositionsAndIndicesDraco(
+//   chunk: {vertexPositions: Float32Array | null, indices: Uint32Array | null},
+//   mesh: any) {
+//     const numFaces = mesh.num_faces();
+//     const numIndices = numFaces * 3;
+//     const numPoints = mesh.num_points();
+//     const indices = new Uint32Array(numIndices);
+
+//     // console.log("Number of faces " + numFaces);
+//     // console.log("Number of vertices " + numPoints);
+
+//     // Add Faces to mesh
+//     const ia = new decoderModule.DracoInt32Array();
+//     for (let i = 0; i < numFaces; ++i) {
+//       decoder.GetFaceFromMesh(mesh, i, ia);
+//       const index = i * 3;
+//       indices[index] = ia.GetValue(0);
+//       indices[index + 1] = ia.GetValue(1);
+//       indices[index + 2] = ia.GetValue(2);
+//     }
+//     decoderModule.destroy(ia);
+//     meshBuilder.AddFacesToMesh(newMesh, numFaces, indices);
+  
+//     const attrs = {POSITION: 3, NORMAL: 3, COLOR: 3, TEX_COORD: 2};
+  
+//     // Object.keys(attrs).forEach((attr) => {
+//       const stride = attrs[attr];
+//       const numValues = numPoints * stride;
+//       const decoderAttr = decoderModule[attr];
+//       const encoderAttr = encoderModule[attr];
+//       const attrId = decoder.GetAttributeId(mesh, decoderAttr);
+  
+//       if (attrId < 0) {
+//         return;
+//       }
+  
+//       console.log("Adding %s attribute", attr);
+  
+//       const attribute = decoder.GetAttribute(mesh, attrId);
+//       const attributeData = new decoderModule.DracoFloat32Array();
+//       decoder.GetAttributeFloatForAllPoints(mesh, attribute, attributeData);
+  
+//       assert(numValues === attributeData.size(), 'Wrong attribute size.');
+  
+//       const attributeDataArray = new Float32Array(numValues);
+//       for (let i = 0; i < numValues; ++i) {
+//         attributeDataArray[i] = attributeData.GetValue(i);
+//       }
+
+//   chunk.vertexPositions = vertexPositions;
+//   chunk.indices = indices;
+// }
+
 /**
  * Extracts vertex positions and triangle vertex indices of the specified endianness from `data'.
  *
@@ -243,6 +296,12 @@ export function decodeTriangleVertexPositionsAndIndices(
   decodeVertexPositionsAndIndices(
       chunk, /*verticesPerPrimitive=*/3, data, endianness, vertexByteOffset, numVertices,
       indexByteOffset, numTriangles);
+  chunk.vertexNormals = computeVertexNormals(chunk.vertexPositions!, chunk.indices!);
+}
+
+export function decodeTriangleVertexPositionsAndIndicesDraco(
+  chunk: FragmentChunk) {
+  // decodeVertexPositionsAndIndicesDraco(chunk, dracoGeometry);
   chunk.vertexNormals = computeVertexNormals(chunk.vertexPositions!, chunk.indices!);
 }
 

@@ -203,7 +203,7 @@ function getBaseConfig(options) {
         }
       ],
     },
-    node: {'Buffer': false},
+    node: {'Buffer': false, 'fs': "empty"},
   };
   if (!options.noOutput) {
     if (options.outputPath === undefined) {
@@ -392,7 +392,8 @@ function getViewerConfigFromEnv(options, env) {
   if (envParts.has('python')) {
     options = makePythonClientOptions(options);
   }
-  return getViewerConfig(options);
+  const a = getViewerConfig(options);
+  return a;
 }
 
 exports.getTypescriptLoaderEntry = getTypescriptLoaderEntry;
