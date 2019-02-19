@@ -155,6 +155,9 @@ function getBaseConfig(options) {
 
         // Patched version of jpgjs.
         'jpgjs': resolveReal(__dirname, '../third_party/jpgjs/jpg.js'),
+        'draco_wasm_wrapper.exec.js': resolveReal(__dirname, '../third_party/draco/draco_wasm_wrapper.exec.js'),
+        'dracoloader': resolveReal(__dirname, '../third_party/draco/dracoloader.js'),
+        'draco_decoder.wasm': resolveReal(__dirname, '../third_party/draco/draco_decoder.wasm')
       },
       extraResolveAliases, options.resolveAliases || {});
   let baseConfig = {
@@ -200,7 +203,18 @@ function getBaseConfig(options) {
             {loader: require.resolve('raw-loader')},
             {loader: require.resolve('glsl-strip-comments-loader')},
           ],
+        },
+        {
+          test: /\.wasm$/,
+          loader: require.resolve('file-loader'),
+          options: {
+            name: '[name].[ext]'
+          }
         }
+        // ,{
+        //   test: /\.exec.js$/,
+        //   loader: require.resolve('script-loader')
+        // }
       ],
     },
     node: {'Buffer': false, 'fs': "empty"},
