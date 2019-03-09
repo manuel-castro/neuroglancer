@@ -81,7 +81,7 @@ const LINKED_SEGMENTATION_LAYER_JSON_KEY = 'linkedSegmentationLayer';
 const FILTER_BY_SEGMENTATION_JSON_KEY = 'filterBySegmentation';
 const Base = UserLayerWithAnnotationsMixin(UserLayerWithCoordinateTransformMixin(UserLayer));
 export class AnnotationUserLayer extends Base {
-  localAnnotations = this.registerDisposer(new LocalAnnotationSource());
+  localAnnotations = this.registerDisposer(new LocalAnnotationSource(undefined, this.annotationKeyboardEventBinder));
   voxelSize = new VoxelSize();
   sourceUrl: string|undefined;
   linkedSegmentationLayer = this.registerDisposer(

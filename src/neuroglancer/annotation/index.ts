@@ -24,6 +24,8 @@ import {parseArray, verify3dScale, verify3dVec, verifyEnumString, verifyObject, 
 import {getRandomHexString} from 'neuroglancer/util/random';
 import {NullarySignal} from 'neuroglancer/util/signal';
 import {Uint64} from 'neuroglancer/util/uint64';
+import {EventActionMap} from 'neuroglancer/util/event_action_map';
+import {KeyboardEventBinder} from 'neuroglancer/util/keyboard_bindings';
 export type AnnotationId = string;
 
 export class AnnotationReference extends RefCounted {
@@ -53,6 +55,8 @@ export const annotationTypes = [
   AnnotationType.AXIS_ALIGNED_BOUNDING_BOX,
   AnnotationType.ELLIPSOID,
 ];
+
+type AnnotationLabelingId = Number;
 
 export interface AnnotationBase {
   /**
@@ -91,6 +95,19 @@ export interface Ellipsoid extends AnnotationBase {
 }
 
 export type Annotation = Line|Point|AxisAlignedBoundingBox|Ellipsoid;
+
+interface AnnotationLabeling {
+  id: AnnotationLabelingId;
+  label: string;
+  color: string;
+  shortcut?: string;
+}
+
+type AnnotationNode = Annotation & {
+  prev: AnnotationNode|null;  
+  next: AnnotationNode|null;
+  labelingId?: AnnotationLabelingId;
+};
 
 export interface AnnotationTypeHandler<T extends Annotation> {
   icon: string;
@@ -246,14 +263,43 @@ export function restoreAnnotation(obj: any, allowMissingId = false): Annotation 
 }
 
 export class AnnotationSource extends RefCounted {
-  private annotationMap = new Map<AnnotationId, Annotation>();
+  private annotationMap = new Map<AnnotationId, AnnotationNode>();
+  private annotationLabelings = new Map<AnnotationLabelingId, AnnotationLabeling>();
+  // private annotationLabelingShortcuts
+  private maxAnnotationClassId = 0;
+  private lastAnnotationNode: AnnotationNode|null = null;
   changed = new NullarySignal();
   readonly = false;
 
   private pending = new Set<AnnotationId>();
 
-  constructor(public objectToLocal = mat4.create()) {
+  constructor(public objectToLocal = mat4.create(), private annotationKeyboardEventBinder?: KeyboardEventBinder<EventActionMap>|null) {
     super();
+  }
+
+  private setAnnotation(id: AnnotationId, annotation: Annotation) {
+    let existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation !== undefined) {
+      existingAnnotation = {
+        ...existingAnnotation,
+        ...annotation
+      };
+      // annotationNode.prev = existingAnnotation.prev;
+      // annotationNode.next = existingAnnotation.next;
+      // annotationNode.labelingId = existingAnnotation.labelingId;
+      // if (this.lastAnnotationNode === existingAnnotation) {
+      //   this.lastAnnotationNode = annotationNode;
+      // }
+    } else {
+      const annotationNode: AnnotationNode = {
+        ...annotation,
+        prev: null,
+        next: null
+      };
+      annotationNode.prev = this.lastAnnotationNode;
+      this.lastAnnotationNode.next = annotationNode;
+      this.lastAnnotationNode = annotationNode;
+    }
   }
 
   add(annotation: Annotation, commit: boolean = true): AnnotationReference {
@@ -262,7 +308,17 @@ export class AnnotationSource extends RefCounted {
     } else if (this.annotationMap.has(annotation.id)) {
       throw new Error(`Annotation id already exists: ${JSON.stringify(annotation.id)}.`);
     }
-    this.annotationMap.set(annotation.id, annotation);
+    const annotationNode: AnnotationNode = {
+      ...annotation,
+      prev: null,
+      next: null
+    };
+    if (this.lastAnnotationNode) {
+      annotationNode.prev = this.lastAnnotationNode;
+      this.lastAnnotationNode.next = annotationNode;
+      this.lastAnnotationNode = annotationNode;
+    }
+    this.annotationMap.set(annotation.id, annotationNode);
     this.changed.dispatch();
     if (!commit) {
       this.pending.add(annotation.id);
@@ -280,7 +336,12 @@ export class AnnotationSource extends RefCounted {
       throw new Error(`Annotation already deleted.`);
     }
     reference.value = annotation;
-    this.annotationMap.set(annotation.id, annotation);
+    const annotationNode: AnnotationNode = {
+      ...annotation,
+      next: null,
+      prev: null
+    };
+    this.annotationMap.set(annotation.id, annotationNode);
     reference.changed.dispatch();
     this.changed.dispatch();
   }
@@ -361,6 +422,15 @@ export class AnnotationSource extends RefCounted {
   reset() {
     this.clear();
   }
+
+  // *getNextAnnotation(): Iterator<Annotation> {
+  //   let annotations = this[Symbol.iterator]();
+  //   while (true) {
+  //     const nextAnnotation = annotations.next();
+  //     if (nextAnnotation.done) {}
+  //   }
+  //   Annotation next = this[Symbol.iterator]()next();
+  // }
 }
 
 export class LocalAnnotationSource extends AnnotationSource {}

@@ -46,6 +46,9 @@ import {RangeWidget} from 'neuroglancer/widget/range';
 import {StackView, Tab} from 'neuroglancer/widget/tab_view';
 import {makeTextIconButton} from 'neuroglancer/widget/text_icon_button';
 import {Uint64EntryWidget} from 'neuroglancer/widget/uint64_entry_widget';
+import {EventActionMap, registerActionListener} from 'neuroglancer/util/event_action_map';
+import {KeyboardEventBinder} from 'neuroglancer/util/keyboard_bindings';
+// import {AutomaticallyFocusedElement} from 'neuroglancer/util/automatic_focus';
 
 type AnnotationIdAndPart = {
   id: string,
@@ -778,7 +781,39 @@ export class AnnotationTab extends Tab {
     };
     this.registerDisposer(this.state.annotationLayerState.changed.add(setAnnotationLayerView));
     setAnnotationLayerView();
+    this.setupAnnotationKeyboardEventBinder();
+    // this.registerDisposer(new KeyboardEventBinder(element, this.layer.annotationInputEventMap));
+    // layer.registerDisposer(new AutomaticallyFocusedElement(element));
   }
+
+  private setupAnnotationKeyboardEventBinder() {
+    const {layer, element} = this;
+    layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
+
+    }));
+    layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
+      'bracketright': 'go-to-next-annotation'
+    }));
+    layer.registerDisposer(layer.annotationKeyboardEventBinder);
+  }
+  // private registerEventActionBindings() {
+  //   const {element} = this;
+  //   this.registerDisposer(new KeyboardEventBinder(element, this.inputEventMap));
+  //   this.registerDisposer(new AutomaticallyFocusedElement(element));
+  // }
+
+  // bindAction(action: string, handler: () => void) {
+  //   this.registerDisposer(registerActionListener(this.element, action, handler));
+  // }
+
+  // /**
+  //  * Called once by the constructor to register the action listeners.
+  //  */
+  // private registerActionListeners() {
+  //   for (const action of ['recolor', 'clear-segments', 'merge-selected', 'cut-selected']) {
+  //     this.bindAction(action, () => {
+  //       this.layerManager.invokeAction(action);
+  //     })}};
 }
 
 function getSelectedAssocatedSegment(annotationLayer: AnnotationLayerState) {
@@ -1053,6 +1088,8 @@ export interface UserLayerWithAnnotations extends UserLayer {
   annotationColor: TrackableRGB;
   annotationFillOpacity: TrackableAlphaValue;
   initializeAnnotationLayerViewTab(tab: AnnotationLayerView): void;
+  // annotationInputEventMap: EventActionMap;
+  annotationKeyboardEventBinder: KeyboardEventBinder<EventActionMap>|null;
 }
 
 export function getAnnotationRenderOptions(userLayer: UserLayerWithAnnotations) {
@@ -1070,7 +1107,7 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
         this.registerDisposer(new SelectedAnnotationState(this.annotationLayerState.addRef()));
     annotationColor = new TrackableRGB(vec3.fromValues(1, 1, 0));
     annotationFillOpacity = trackableAlphaValue(0.0);
-
+    annotationKeyboardEventBinder = null;
     constructor(...args: any[]) {
       super(...args);
       this.selectedAnnotation.changed.add(this.specificationChanged.dispatch);

@@ -70,6 +70,13 @@ export function getDefaultRenderedDataPanelBindings() {
           'control+keym': 'merge-selected',
           'keyc': 'two-point-cut',
           'control+keyc': 'cut-selected',
+          // 'f1': {action: 'zoom-in', preventDefault: true},
+          // 'f2': {action: 'zoom-out', preventDefault: true},
+          'bracketright': 'zoom-in',
+          // 'control+keya': 'toggle-annotation-labeling-mode',
+          // 'tab+digit1': 'zoom-in',
+          // 'tab+digit2': 'zoom-out',
+          'digit2': 'zoom-out',
 
           'at:control+wheel': {action: 'zoom-via-wheel', preventDefault: true},
           'at:wheel': {action: 'z+1-via-wheel', preventDefault: true},
