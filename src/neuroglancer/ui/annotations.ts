@@ -46,6 +46,7 @@ import {RangeWidget} from 'neuroglancer/widget/range';
 import {StackView, Tab} from 'neuroglancer/widget/tab_view';
 import {makeTextIconButton} from 'neuroglancer/widget/text_icon_button';
 import {Uint64EntryWidget} from 'neuroglancer/widget/uint64_entry_widget';
+// import {AutomaticallyFocusedElement} from 'neuroglancer/util/automatic_focus';
 
 type AnnotationIdAndPart = {
   id: string,
@@ -567,11 +568,12 @@ export class AnnotationLayerView extends Tab {
     if (annotation.description) {
       const description = document.createElement('div');
       description.className = 'neuroglancer-annotation-description';
-      description.textContent = annotation.description;
+      description.textContent = this.layer.getAnnotationText(annotation);
       element.appendChild(description);
     }
     return element;
   }
+
 }
 
 export class AnnotationDetailsTab extends Tab {
@@ -1053,6 +1055,7 @@ export interface UserLayerWithAnnotations extends UserLayer {
   annotationColor: TrackableRGB;
   annotationFillOpacity: TrackableAlphaValue;
   initializeAnnotationLayerViewTab(tab: AnnotationLayerView): void;
+  getAnnotationText(annotation: Annotation): string;
 }
 
 export function getAnnotationRenderOptions(userLayer: UserLayerWithAnnotations) {
@@ -1070,7 +1073,6 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
         this.registerDisposer(new SelectedAnnotationState(this.annotationLayerState.addRef()));
     annotationColor = new TrackableRGB(vec3.fromValues(1, 1, 0));
     annotationFillOpacity = trackableAlphaValue(0.0);
-
     constructor(...args: any[]) {
       super(...args);
       this.selectedAnnotation.changed.add(this.specificationChanged.dispatch);
@@ -1120,6 +1122,10 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
 
     initializeAnnotationLayerViewTab(tab: AnnotationLayerView) {
       tab;
+    }
+
+    getAnnotationText(annotation: Annotation) {
+      return annotation.description || '';
     }
   }
   return C;

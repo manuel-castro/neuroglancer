@@ -70,6 +70,8 @@ export function getDefaultRenderedDataPanelBindings() {
           'control+keym': 'merge-selected',
           'keyc': 'two-point-cut',
           'control+keyc': 'cut-selected',
+          // 'f1': {action: 'zoom-in', preventDefault: true},
+          // 'f2': {action: 'zoom-out', preventDefault: true},
 
           'at:control+wheel': {action: 'zoom-via-wheel', preventDefault: true},
           'at:wheel': {action: 'z+1-via-wheel', preventDefault: true},

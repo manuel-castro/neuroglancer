@@ -722,6 +722,19 @@ export class LayerSelectedValues extends RefCounted {
     }
   }
 
+  manualUpdate(position: Float32Array) {
+    let values = this.values;
+    let rawValues = this.rawValues;
+    for (let layer of this.layerManager.managedLayers) {
+      let userLayer = layer.layer;
+      if (layer.visible && userLayer) {
+        let result = userLayer.getValueAt(position, this.mouseState);
+        rawValues.set(userLayer, result);
+        values.set(userLayer, userLayer.transformPickedValue(result));
+      }
+    }
+  }
+
   get(userLayer: UserLayer) {
     this.update();
     return this.values.get(userLayer);
