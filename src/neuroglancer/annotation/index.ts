@@ -104,8 +104,8 @@ interface AnnotationLabeling {
 }
 
 type AnnotationNode = Annotation & {
-  prev: AnnotationNode|null;  
-  next: AnnotationNode|null;
+  prev: AnnotationNode;
+  next: AnnotationNode;
   labelingId?: AnnotationLabelingId;
 };
 
@@ -277,29 +277,80 @@ export class AnnotationSource extends RefCounted {
     super();
   }
 
-  private setAnnotation(id: AnnotationId, annotation: Annotation) {
-    let existingAnnotation = this.annotationMap.get(id);
-    if (existingAnnotation !== undefined) {
-      existingAnnotation = {
-        ...existingAnnotation,
-        ...annotation
-      };
-      // annotationNode.prev = existingAnnotation.prev;
-      // annotationNode.next = existingAnnotation.next;
-      // annotationNode.labelingId = existingAnnotation.labelingId;
-      // if (this.lastAnnotationNode === existingAnnotation) {
-      //   this.lastAnnotationNode = annotationNode;
-      // }
-    } else {
-      const annotationNode: AnnotationNode = {
-        ...annotation,
-        prev: null,
-        next: null
-      };
-      annotationNode.prev = this.lastAnnotationNode;
-      this.lastAnnotationNode.next = annotationNode;
-      this.lastAnnotationNode = annotationNode;
+  private updateAnnotationNode(id: AnnotationId, annotation: Annotation) {
+    const existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation) {
+      Object.assign(existingAnnotation, annotation);
     }
+  }
+
+  private insertAnnotationNode(id: AnnotationId, annotation: Annotation) {
+    let annotationNode: any = {
+      ...annotation,
+      prev: null,
+      next: null
+    };
+    if (this.lastAnnotationNode) {
+      annotationNode.prev = this.lastAnnotationNode;
+      annotationNode.next = this.lastAnnotationNode.next;
+      annotationNode = <AnnotationNode>annotationNode;
+      this.lastAnnotationNode.next = annotationNode;
+      annotationNode.next.prev = annotationNode;
+    } else {
+      annotationNode.prev = annotationNode.next = annotationNode;
+      annotationNode = <AnnotationNode>annotationNode;
+    }
+    this.lastAnnotationNode = annotationNode;
+    this.annotationMap.set(annotation.id, annotationNode);
+  }
+
+  private deleteAnnotationNode(id: AnnotationId) {
+    const existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation) {
+      this.annotationMap.delete(id);
+      if (this.annotationMap.size > 0) {
+        existingAnnotation.prev.next = existingAnnotation.next;
+        existingAnnotation.next.prev = existingAnnotation.prev;
+        if (this.lastAnnotationNode === existingAnnotation) {
+          this.lastAnnotationNode = existingAnnotation.prev;
+        }
+      } else {
+        this.lastAnnotationNode = null;
+      }
+    }
+    return existingAnnotation;
+  }
+
+  getNextAnnotationId(id: AnnotationId) {
+    const existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation) {
+      return existingAnnotation.next.id;
+    }
+    return;
+  }
+
+  getPrevAnnotationId(id: AnnotationId) {
+    const existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation) {
+      return existingAnnotation.prev.id;
+    }
+    return;
+  }
+
+  getNextAnnotation(id: AnnotationId): Annotation|undefined {
+    const existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation) {
+      return existingAnnotation.next;
+    }
+    return;
+  }
+
+  getPrevAnnotation(id: AnnotationId): Annotation|undefined {
+    const existingAnnotation = this.annotationMap.get(id);
+    if (existingAnnotation) {
+      return existingAnnotation.prev;
+    }
+    return;
   }
 
   add(annotation: Annotation, commit: boolean = true): AnnotationReference {
@@ -308,17 +359,7 @@ export class AnnotationSource extends RefCounted {
     } else if (this.annotationMap.has(annotation.id)) {
       throw new Error(`Annotation id already exists: ${JSON.stringify(annotation.id)}.`);
     }
-    const annotationNode: AnnotationNode = {
-      ...annotation,
-      prev: null,
-      next: null
-    };
-    if (this.lastAnnotationNode) {
-      annotationNode.prev = this.lastAnnotationNode;
-      this.lastAnnotationNode.next = annotationNode;
-      this.lastAnnotationNode = annotationNode;
-    }
-    this.annotationMap.set(annotation.id, annotationNode);
+    this.insertAnnotationNode(annotation.id, annotation);
     this.changed.dispatch();
     if (!commit) {
       this.pending.add(annotation.id);
@@ -336,12 +377,7 @@ export class AnnotationSource extends RefCounted {
       throw new Error(`Annotation already deleted.`);
     }
     reference.value = annotation;
-    const annotationNode: AnnotationNode = {
-      ...annotation,
-      next: null,
-      prev: null
-    };
-    this.annotationMap.set(annotation.id, annotationNode);
+    this.updateAnnotationNode(annotation.id, annotation);
     reference.changed.dispatch();
     this.changed.dispatch();
   }
@@ -359,7 +395,7 @@ export class AnnotationSource extends RefCounted {
       return;
     }
     reference.value = null;
-    this.annotationMap.delete(reference.id);
+    this.deleteAnnotationNode(reference.id);
     this.pending.delete(reference.id);
     reference.changed.dispatch();
     this.changed.dispatch();
@@ -396,6 +432,7 @@ export class AnnotationSource extends RefCounted {
 
   clear() {
     this.annotationMap.clear();
+    this.lastAnnotationNode = null;
     this.pending.clear();
     this.changed.dispatch();
   }
@@ -403,11 +440,13 @@ export class AnnotationSource extends RefCounted {
   restoreState(obj: any) {
     const {annotationMap} = this;
     annotationMap.clear();
+    this.lastAnnotationNode = null;
     this.pending.clear();
     if (obj !== undefined) {
       parseArray(obj, x => {
         const annotation = restoreAnnotation(x);
-        annotationMap.set(annotation.id, annotation);
+        this.insertAnnotationNode(annotation.id, annotation);
+        // annotationMap.set(annotation.id, annotation);
       });
     }
     for (const reference of this.references.values()) {

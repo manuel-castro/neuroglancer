@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {AnnotationType, LocalAnnotationSource} from 'neuroglancer/annotation';
+import {AnnotationType, LocalAnnotationSource, AnnotationId} from 'neuroglancer/annotation';
 import {AnnotationLayerState} from 'neuroglancer/annotation/frontend';
 import {CoordinateTransform, makeDerivedCoordinateTransform} from 'neuroglancer/coordinate_transform';
 import {LayerReference, ManagedUserLayer, UserLayer} from 'neuroglancer/layer';
@@ -201,6 +201,22 @@ export class AnnotationUserLayer extends Base {
     x[LINKED_SEGMENTATION_LAYER_JSON_KEY] = this.linkedSegmentationLayer.toJSON();
     x[FILTER_BY_SEGMENTATION_JSON_KEY] = this.filterBySegmentation.toJSON();
     return x;
+  }
+
+  getPrevAnnotationId() {
+    return this.localAnnotations.getPrevAnnotationId(this.selectedAnnotation.value!.id)!;
+  }
+
+  getNextAnnotationId() {
+    return this.localAnnotations.getNextAnnotationId(this.selectedAnnotation.value!.id)!;
+  }
+
+  getPrevAnnotation() {
+    return this.localAnnotations.getPrevAnnotation(this.selectedAnnotation.value!.id)!;
+  }
+
+  getNextAnnotation() {
+    return this.localAnnotations.getNextAnnotation(this.selectedAnnotation.value!.id)!;
   }
 }
 

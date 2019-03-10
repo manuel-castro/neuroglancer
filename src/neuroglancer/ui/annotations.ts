@@ -331,6 +331,18 @@ function makePointLink(
   }
 }
 
+function getPointFromAnnotation(annotation: Annotation) {
+  switch (annotation.type) {
+    case AnnotationType.AXIS_ALIGNED_BOUNDING_BOX:
+    case AnnotationType.LINE:
+      return annotation.pointA;
+    case AnnotationType.POINT:
+      return annotation.point;
+    case AnnotationType.ELLIPSOID:
+      return annotation.center;
+  }
+}
+
 export function getPositionSummary(
     element: HTMLElement, annotation: Annotation, transform: mat4, voxelSize: VoxelSize,
     setSpatialCoordinates?: (point: vec3) => void) {
@@ -463,6 +475,8 @@ export class AnnotationLayerView extends Tab {
     this.registerDisposer(
         this.annotationLayer.hoverState.changed.add(() => this.updateHoverView()));
     this.registerDisposer(this.state.changed.add(() => this.updateSelectionView()));
+
+    this.setupAnnotationKeyboardEventBinder();
   }
 
   private updateSelectionView() {
@@ -574,6 +588,30 @@ export class AnnotationLayerView extends Tab {
       element.appendChild(description);
     }
     return element;
+  }
+
+  private setupAnnotationKeyboardEventBinder() {
+    const {layer, element} = this;
+    element.tabIndex = -1;
+    layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
+      layer.selectedAnnotation.value = {id: layer.getNextAnnotationId(), partIndex: 0};
+      const point = getPointFromAnnotation(layer.getNextAnnotation());
+      const spatialPoint = vec3.create();
+      vec3.transformMat4(spatialPoint, point, this.annotationLayer.objectToGlobal);
+      this.setSpatialCoordinates(spatialPoint);
+    }));
+    layer.registerDisposer(registerActionListener(element, 'go-to-prev-annotation', () => {
+      layer.selectedAnnotation.value = {id: layer.getPrevAnnotationId(), partIndex: 0};
+      const point = getPointFromAnnotation(layer.getPrevAnnotation());
+      const spatialPoint = vec3.create();
+      vec3.transformMat4(spatialPoint, point, this.annotationLayer.objectToGlobal);
+      this.setSpatialCoordinates(spatialPoint);
+    }));
+    layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
+      'bracketright': 'go-to-next-annotation',
+      'bracketleft': 'go-to-prev-annotation'
+    }));
+    layer.registerDisposer(layer.annotationKeyboardEventBinder);
   }
 }
 
@@ -781,21 +819,31 @@ export class AnnotationTab extends Tab {
     };
     this.registerDisposer(this.state.annotationLayerState.changed.add(setAnnotationLayerView));
     setAnnotationLayerView();
-    this.setupAnnotationKeyboardEventBinder();
+    // this.setupAnnotationKeyboardEventBinder();
     // this.registerDisposer(new KeyboardEventBinder(element, this.layer.annotationInputEventMap));
     // layer.registerDisposer(new AutomaticallyFocusedElement(element));
   }
 
-  private setupAnnotationKeyboardEventBinder() {
-    const {layer, element} = this;
-    layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
-
-    }));
-    layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
-      'bracketright': 'go-to-next-annotation'
-    }));
-    layer.registerDisposer(layer.annotationKeyboardEventBinder);
-  }
+  // private setupAnnotationKeyboardEventBinder() {
+  //   const {layer, element} = this;
+  //   element.tabIndex = -1;
+  //   layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
+  //     layer.selectedAnnotation.value = {id: layer.getNextAnnotationId(), partIndex: 0};
+  //     const point = getPointFromAnnotation(layer.getNextAnnotation());
+  //     const spatialPoint = vec3.transformMat4(vec3.create(), point, transform);
+  //     this.setSpatialCoordinates(point);
+  //   }));
+  //   layer.registerDisposer(registerActionListener(element, 'go-to-prev-annotation', () => {
+  //     layer.selectedAnnotation.value = {id: layer.getPrevAnnotationId(), partIndex: 0};
+  //     const point = getPointFromAnnotation(layer.getPrevAnnotation());
+  //     this.setSpatialCoordinates(point);
+  //   }));
+  //   layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
+  //     'bracketright': 'go-to-next-annotation',
+  //     'bracketleft': 'go-to-prev-annotation'
+  //   }));
+  //   layer.registerDisposer(layer.annotationKeyboardEventBinder);
+  // }
   // private registerEventActionBindings() {
   //   const {element} = this;
   //   this.registerDisposer(new KeyboardEventBinder(element, this.inputEventMap));
@@ -1090,6 +1138,10 @@ export interface UserLayerWithAnnotations extends UserLayer {
   initializeAnnotationLayerViewTab(tab: AnnotationLayerView): void;
   // annotationInputEventMap: EventActionMap;
   annotationKeyboardEventBinder: KeyboardEventBinder<EventActionMap>|null;
+  getNextAnnotationId(): string;
+  getPrevAnnotationId(): string;
+  getNextAnnotation(): Annotation;
+  getPrevAnnotation(): Annotation;
 }
 
 export function getAnnotationRenderOptions(userLayer: UserLayerWithAnnotations) {
@@ -1153,6 +1205,22 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
       x[ANNOTATION_COLOR_JSON_KEY] = this.annotationColor.toJSON();
       x[ANNOTATION_FILL_OPACITY_JSON_KEY] = this.annotationFillOpacity.toJSON();
       return x;
+    }
+
+    getNextAnnotationId() {
+      return this.selectedAnnotation.value!.id;
+    }
+
+    getPrevAnnotationId() {
+      return this.selectedAnnotation.value!.id;
+    }
+
+    getNextAnnotation() {
+      return this.selectedAnnotation.reference!.value!;
+    }
+
+    getPrevAnnotation() {
+      return this.selectedAnnotation.reference!.value!;
     }
 
     initializeAnnotationLayerViewTab(tab: AnnotationLayerView) {
