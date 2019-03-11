@@ -56,14 +56,13 @@ export const annotationTypes = [
   AnnotationType.ELLIPSOID,
 ];
 
-type AnnotationLabelingId = Number;
-
 export interface AnnotationBase {
   /**
    * If equal to `undefined`, then the description is unknown (possibly still being loaded).  If
    * equal to `null`, then there is no description.
    */
   description?: string|undefined|null;
+  tagId?: Number;
 
   id: AnnotationId;
   type: AnnotationType;
@@ -96,17 +95,17 @@ export interface Ellipsoid extends AnnotationBase {
 
 export type Annotation = Line|Point|AxisAlignedBoundingBox|Ellipsoid;
 
-interface AnnotationLabeling {
-  id: AnnotationLabelingId;
+interface AnnotationTag {
+  id: Number;
   label: string;
-  color: string;
-  shortcut?: string;
+  color?: string;
+  shortcut: string;
 }
 
 type AnnotationNode = Annotation & {
   prev: AnnotationNode;
   next: AnnotationNode;
-  labelingId?: AnnotationLabelingId;
+  // tagId?: Number;
 };
 
 export interface AnnotationTypeHandler<T extends Annotation> {
@@ -264,8 +263,7 @@ export function restoreAnnotation(obj: any, allowMissingId = false): Annotation 
 
 export class AnnotationSource extends RefCounted {
   private annotationMap = new Map<AnnotationId, AnnotationNode>();
-  private annotationLabelings = new Map<AnnotationLabelingId, AnnotationLabeling>();
-  // private annotationLabelingShortcuts
+  private annotationTags = new Map<Number, AnnotationTag>();
   private maxAnnotationClassId = 0;
   private lastAnnotationNode: AnnotationNode|null = null;
   changed = new NullarySignal();
@@ -273,7 +271,7 @@ export class AnnotationSource extends RefCounted {
 
   private pending = new Set<AnnotationId>();
 
-  constructor(public objectToLocal = mat4.create(), private annotationKeyboardEventBinder?: KeyboardEventBinder<EventActionMap>|null) {
+  constructor(public objectToLocal = mat4.create()) {
     super();
   }
 
@@ -462,14 +460,6 @@ export class AnnotationSource extends RefCounted {
     this.clear();
   }
 
-  // *getNextAnnotation(): Iterator<Annotation> {
-  //   let annotations = this[Symbol.iterator]();
-  //   while (true) {
-  //     const nextAnnotation = annotations.next();
-  //     if (nextAnnotation.done) {}
-  //   }
-  //   Annotation next = this[Symbol.iterator]()next();
-  // }
 }
 
 export class LocalAnnotationSource extends AnnotationSource {}

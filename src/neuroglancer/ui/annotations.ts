@@ -593,6 +593,10 @@ export class AnnotationLayerView extends Tab {
   private setupAnnotationKeyboardEventBinder() {
     const {layer, element} = this;
     element.tabIndex = -1;
+    for (const [actionName, actionFunction] of this.layer.annotationEventActions) {
+      layer.registerDisposer(registerActionListener(element, actionName, actionFunction.bind(layer)));
+      layer.registerAnnotationShortcut(element, actionName, actionFunction);
+    }
     layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
       layer.selectedAnnotation.value = {id: layer.getNextAnnotationId(), partIndex: 0};
       const point = getPointFromAnnotation(layer.getNextAnnotation());
@@ -607,11 +611,17 @@ export class AnnotationLayerView extends Tab {
       vec3.transformMat4(spatialPoint, point, this.annotationLayer.objectToGlobal);
       this.setSpatialCoordinates(spatialPoint);
     }));
-    layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
-      'bracketright': 'go-to-next-annotation',
-      'bracketleft': 'go-to-prev-annotation'
-    }));
+    layer.annotationEventMap.set('bracketright', 'go-to-next-annotation');
+    layer.annotationEventMap.set('bracketleft', 'go-to-prev-annotation');
+    layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  layer.annotationEventMap);
+    // layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
+    //   'bracketright': 'go-to-next-annotation',
+    //   'bracketleft': 'go-to-prev-annotation'
+    // }));
+    // layer.annotationEventMap.set('bracketright', 'go-to-next-annotation');
+    // layer.annotationEventMap.set('bracketleft', 'go-to-prev-annotation');
     layer.registerDisposer(layer.annotationKeyboardEventBinder);
+    // layer.registerDisposer(new AutomaticallyFocusedElement(element));
   }
 }
 
@@ -819,49 +829,7 @@ export class AnnotationTab extends Tab {
     };
     this.registerDisposer(this.state.annotationLayerState.changed.add(setAnnotationLayerView));
     setAnnotationLayerView();
-    // this.setupAnnotationKeyboardEventBinder();
-    // this.registerDisposer(new KeyboardEventBinder(element, this.layer.annotationInputEventMap));
-    // layer.registerDisposer(new AutomaticallyFocusedElement(element));
   }
-
-  // private setupAnnotationKeyboardEventBinder() {
-  //   const {layer, element} = this;
-  //   element.tabIndex = -1;
-  //   layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
-  //     layer.selectedAnnotation.value = {id: layer.getNextAnnotationId(), partIndex: 0};
-  //     const point = getPointFromAnnotation(layer.getNextAnnotation());
-  //     const spatialPoint = vec3.transformMat4(vec3.create(), point, transform);
-  //     this.setSpatialCoordinates(point);
-  //   }));
-  //   layer.registerDisposer(registerActionListener(element, 'go-to-prev-annotation', () => {
-  //     layer.selectedAnnotation.value = {id: layer.getPrevAnnotationId(), partIndex: 0};
-  //     const point = getPointFromAnnotation(layer.getPrevAnnotation());
-  //     this.setSpatialCoordinates(point);
-  //   }));
-  //   layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
-  //     'bracketright': 'go-to-next-annotation',
-  //     'bracketleft': 'go-to-prev-annotation'
-  //   }));
-  //   layer.registerDisposer(layer.annotationKeyboardEventBinder);
-  // }
-  // private registerEventActionBindings() {
-  //   const {element} = this;
-  //   this.registerDisposer(new KeyboardEventBinder(element, this.inputEventMap));
-  //   this.registerDisposer(new AutomaticallyFocusedElement(element));
-  // }
-
-  // bindAction(action: string, handler: () => void) {
-  //   this.registerDisposer(registerActionListener(this.element, action, handler));
-  // }
-
-  // /**
-  //  * Called once by the constructor to register the action listeners.
-  //  */
-  // private registerActionListeners() {
-  //   for (const action of ['recolor', 'clear-segments', 'merge-selected', 'cut-selected']) {
-  //     this.bindAction(action, () => {
-  //       this.layerManager.invokeAction(action);
-  //     })}};
 }
 
 function getSelectedAssocatedSegment(annotationLayer: AnnotationLayerState) {
@@ -1136,12 +1104,14 @@ export interface UserLayerWithAnnotations extends UserLayer {
   annotationColor: TrackableRGB;
   annotationFillOpacity: TrackableAlphaValue;
   initializeAnnotationLayerViewTab(tab: AnnotationLayerView): void;
-  // annotationInputEventMap: EventActionMap;
-  annotationKeyboardEventBinder: KeyboardEventBinder<EventActionMap>|null;
+  annotationKeyboardEventBinder?: KeyboardEventBinder<EventActionMap>;
+  annotationEventMap: EventActionMap;
+  annotationEventActions: Map<string, Function>;
   getNextAnnotationId(): string;
   getPrevAnnotationId(): string;
   getNextAnnotation(): Annotation;
   getPrevAnnotation(): Annotation;
+  registerAnnotationShortcut(eventTarget: EventTarget, actionName: string, actionFunction: Function): void;
 }
 
 export function getAnnotationRenderOptions(userLayer: UserLayerWithAnnotations) {
@@ -1159,7 +1129,9 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
         this.registerDisposer(new SelectedAnnotationState(this.annotationLayerState.addRef()));
     annotationColor = new TrackableRGB(vec3.fromValues(1, 1, 0));
     annotationFillOpacity = trackableAlphaValue(0.0);
-    annotationKeyboardEventBinder = null;
+    annotationKeyboardEventBinder: KeyboardEventBinder<EventActionMap>;
+    annotationEventMap = new EventActionMap();
+    annotationEventActions = new Map<string, Function>();
     constructor(...args: any[]) {
       super(...args);
       this.selectedAnnotation.changed.add(this.specificationChanged.dispatch);
@@ -1225,6 +1197,10 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
 
     initializeAnnotationLayerViewTab(tab: AnnotationLayerView) {
       tab;
+    }
+
+    registerAnnotationShortcut(eventTarget: EventTarget, actionName: string, actionFunction: Function) {
+      return;
     }
   }
   return C;

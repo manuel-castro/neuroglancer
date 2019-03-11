@@ -30,6 +30,9 @@ import {UserLayerWithCoordinateTransformMixin} from 'neuroglancer/user_layer_wit
 import {mat4, vec3} from 'neuroglancer/util/geom';
 import {parseArray, verify3dVec} from 'neuroglancer/util/json';
 import {LayerReferenceWidget} from 'neuroglancer/widget/layer_reference';
+import {Tab} from 'neuroglancer/widget/tab_view';
+import {Borrowed} from 'neuroglancer/util/disposable';
+import {registerActionListener} from 'neuroglancer/util/event_action_map';
 
 require('./user_layer.css');
 
@@ -81,7 +84,7 @@ const LINKED_SEGMENTATION_LAYER_JSON_KEY = 'linkedSegmentationLayer';
 const FILTER_BY_SEGMENTATION_JSON_KEY = 'filterBySegmentation';
 const Base = UserLayerWithAnnotationsMixin(UserLayerWithCoordinateTransformMixin(UserLayer));
 export class AnnotationUserLayer extends Base {
-  localAnnotations = this.registerDisposer(new LocalAnnotationSource(undefined, this.annotationKeyboardEventBinder));
+  localAnnotations = this.registerDisposer(new LocalAnnotationSource());
   voxelSize = new VoxelSize();
   sourceUrl: string|undefined;
   linkedSegmentationLayer = this.registerDisposer(
@@ -148,6 +151,11 @@ export class AnnotationUserLayer extends Base {
       this.registerDisposer(this.voxelSize.changed.add(handleVoxelSizeChanged));
       this.registerDisposer(this.manager.voxelSize.changed.add(handleVoxelSizeChanged));
       handleVoxelSizeChanged();
+      this.tabs.add('annotation-shortcuts', {
+        label: 'Shortcuts',
+        order: 1000,
+        getter: () => new AnnotationShortcutsTab(this)
+      });
     } else {
       StatusMessage
           .forPromise(
@@ -217,6 +225,71 @@ export class AnnotationUserLayer extends Base {
 
   getNextAnnotation() {
     return this.localAnnotations.getNextAnnotation(this.selectedAnnotation.value!.id)!;
+  }
+
+  registerAnnotationShortcut(eventTarget: EventTarget, actionName: string, actionFunction: Function) {
+
+  }
+}
+
+class AnnotationShortcutsTab extends Tab {
+  private keyShortcuts = ['keyq', 'keyw', 'keye', 'keyr'];
+  constructor(public layer: Borrowed<AnnotationUserLayer>) {
+    super();
+    const {element} = this;
+    element.classList.add('neuroglancer-annotation-shortcuts-tab');
+    const addShortcutButton = document.createElement('button');
+    addShortcutButton.textContent = '+';
+    addShortcutButton.addEventListener('click', () => {
+      if (this.keyShortcuts.length === 0) {
+        alert('Reached max number of shortcuts');
+      } else {
+        this.addNewShortcut();
+      }
+    });
+    element.appendChild(addShortcutButton);
+  }
+
+  private addNewShortcut() {
+    const newShortcutElement = document.createElement('div');
+    newShortcutElement.classList.add('neuroglancer-annotation-shortcut');
+    const shortcutTextbox = document.createElement('span');
+    shortcutTextbox.textContent = this.keyShortcuts.pop() || null;
+    shortcutTextbox.className = 'display-annotation-shortcut-textbox';
+    const annotationTagName = document.createElement('input');
+    const getTagName = () => {
+      return annotationTagName.value;
+    };
+    const {annotationKeyboardEventBinder, localAnnotations, selectedAnnotation, annotationEventActions, annotationEventMap} = this.layer;
+    if (annotationKeyboardEventBinder) {
+      this.layer.registerDisposer(registerActionListener(annotationKeyboardEventBinder.target, shortcutTextbox.textContent!, () => {
+        console.log(getTagName());
+        const reference = selectedAnnotation.reference!;
+        const annotation = reference.value!;
+        localAnnotations.update(reference, {...annotation, description: getTagName()});
+        localAnnotations.commit(reference);
+      }));
+      annotationKeyboardEventBinder.eventMap.set(shortcutTextbox.textContent!, shortcutTextbox.textContent!);
+    } else {
+      annotationEventActions.set(shortcutTextbox.textContent!, () => {
+        console.log(getTagName());
+        const reference = selectedAnnotation.reference!;
+        const annotation = reference.value!;
+        localAnnotations.update(reference, {...annotation, description: getTagName()});
+        localAnnotations.commit(reference);
+      });
+      annotationEventMap.set(shortcutTextbox.textContent!, shortcutTextbox.textContent!);
+    }
+    const removeShortcut = document.createElement('button');
+    removeShortcut.textContent = 'x';
+    removeShortcut.addEventListener('click', () => {
+      newShortcutElement.remove();
+      this.keyShortcuts.push(shortcutTextbox.textContent!);
+    });
+    newShortcutElement.appendChild(shortcutTextbox);
+    newShortcutElement.appendChild(annotationTagName);
+    newShortcutElement.appendChild(removeShortcut);
+    this.element.appendChild(newShortcutElement);
   }
 }
 
