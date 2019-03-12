@@ -39,6 +39,11 @@ require('./user_layer.css');
 const POINTS_JSON_KEY = 'points';
 const ANNOTATIONS_JSON_KEY = 'annotations';
 
+type AnnotationShortcutAction = {
+  actionName: string;
+  actionFunction: Function;
+};
+
 function addPointAnnotations(annotations: LocalAnnotationSource, obj: any) {
   if (obj === undefined) {
     return;
@@ -90,6 +95,7 @@ export class AnnotationUserLayer extends Base {
   linkedSegmentationLayer = this.registerDisposer(
       new LayerReference(this.manager.rootLayers.addRef(), isValidLinkedSegmentationLayer));
   filterBySegmentation = new TrackableBoolean(false);
+  private annotationShortcutActionMap: Map<AnnotationShortcutAction, () => void>;
 
   getAnnotationRenderOptions() {
     const segmentationState =
@@ -151,11 +157,13 @@ export class AnnotationUserLayer extends Base {
       this.registerDisposer(this.voxelSize.changed.add(handleVoxelSizeChanged));
       this.registerDisposer(this.manager.voxelSize.changed.add(handleVoxelSizeChanged));
       handleVoxelSizeChanged();
-      this.tabs.add('annotation-shortcuts', {
-        label: 'Shortcuts',
-        order: 1000,
-        getter: () => new AnnotationShortcutsTab(this)
-      });
+      if (!this.localAnnotations.readonly) {
+        this.tabs.add('annotation-shortcuts', {
+          label: 'Shortcuts',
+          order: 1000,
+          getter: () => new AnnotationShortcutsTab(this)
+        });
+      }
     } else {
       StatusMessage
           .forPromise(
@@ -227,7 +235,13 @@ export class AnnotationUserLayer extends Base {
     return this.localAnnotations.getNextAnnotation(this.selectedAnnotation.value!.id)!;
   }
 
-  registerAnnotationShortcut(eventTarget: EventTarget, actionName: string, actionFunction: Function) {
+  registerAnnotationShortcut(actionName: string, actionFunction: () => void) {
+    const removeShortcutListener = registerActionListener(this.annotationKeyboardEventBinder.target, actionName, actionFunction);
+    this.registerDisposer(removeShortcutListener);
+    this.annotationShortcutActionMap.set({actionName, actionFunction}, removeShortcutListener);
+  }
+
+  unregisterAnnotationShortcut(actionName: string, actionFunction: () => void) {
 
   }
 }
@@ -240,9 +254,10 @@ class AnnotationShortcutsTab extends Tab {
     element.classList.add('neuroglancer-annotation-shortcuts-tab');
     const addShortcutButton = document.createElement('button');
     addShortcutButton.textContent = '+';
+    const numShortcuts = this.keyShortcuts.length;
     addShortcutButton.addEventListener('click', () => {
       if (this.keyShortcuts.length === 0) {
-        alert('Reached max number of shortcuts');
+        alert(`Reached max number of shortcuts. Currently, only ${numShortcuts} are supported.`);
       } else {
         this.addNewShortcut();
       }
@@ -261,23 +276,38 @@ class AnnotationShortcutsTab extends Tab {
       return annotationTagName.value;
     };
     const {annotationKeyboardEventBinder, localAnnotations, selectedAnnotation, annotationEventActions, annotationEventMap} = this.layer;
+    // if (annotationKeyboardEventBinder) {
+    //   this.layer.registerDisposer(registerActionListener(annotationKeyboardEventBinder.target, shortcutTextbox.textContent!, () => {
+    //     console.log(getTagName());
+    //     const reference = selectedAnnotation.reference!;
+    //     const annotation = reference.value!;
+    //     localAnnotations.update(reference, {...annotation, description: getTagName()});
+    //     localAnnotations.commit(reference);
+    //   }));
+    //   annotationKeyboardEventBinder.eventMap.set(shortcutTextbox.textContent!, shortcutTextbox.textContent!);
+    // } else {
+    //   annotationEventActions.set(shortcutTextbox.textContent!, () => {
+    //     console.log(getTagName());
+    //     const reference = selectedAnnotation.reference!;
+    //     const annotation = reference.value!;
+    //     localAnnotations.update(reference, {...annotation, description: getTagName()});
+    //     localAnnotations.commit(reference);
+    //   });
+    //   annotationEventMap.set(shortcutTextbox.textContent!, shortcutTextbox.textContent!);
+    // }
+    const addAnnotationTagToAnnotation = () => {
+      const reference = selectedAnnotation.reference!;
+      const annotation = reference.value!;
+      localAnnotations.update(reference, {...annotation, description: getTagName()});
+      localAnnotations.commit(reference);
+    };
     if (annotationKeyboardEventBinder) {
-      this.layer.registerDisposer(registerActionListener(annotationKeyboardEventBinder.target, shortcutTextbox.textContent!, () => {
-        console.log(getTagName());
-        const reference = selectedAnnotation.reference!;
-        const annotation = reference.value!;
-        localAnnotations.update(reference, {...annotation, description: getTagName()});
-        localAnnotations.commit(reference);
-      }));
+      console.log(getTagName());
+      this.layer.registerDisposer(registerActionListener(annotationKeyboardEventBinder.target, shortcutTextbox.textContent!, addAnnotationTagToAnnotation));
       annotationKeyboardEventBinder.eventMap.set(shortcutTextbox.textContent!, shortcutTextbox.textContent!);
     } else {
-      annotationEventActions.set(shortcutTextbox.textContent!, () => {
-        console.log(getTagName());
-        const reference = selectedAnnotation.reference!;
-        const annotation = reference.value!;
-        localAnnotations.update(reference, {...annotation, description: getTagName()});
-        localAnnotations.commit(reference);
-      });
+      console.log(getTagName());
+      annotationEventActions.set(shortcutTextbox.textContent!, addAnnotationTagToAnnotation);
       annotationEventMap.set(shortcutTextbox.textContent!, shortcutTextbox.textContent!);
     }
     const removeShortcut = document.createElement('button');
@@ -285,6 +315,7 @@ class AnnotationShortcutsTab extends Tab {
     removeShortcut.addEventListener('click', () => {
       newShortcutElement.remove();
       this.keyShortcuts.push(shortcutTextbox.textContent!);
+      this.layer.unregisterAnnotationShortcut(shortcutTextbox.textContent!, addAnnotationTagToAnnotation);
     });
     newShortcutElement.appendChild(shortcutTextbox);
     newShortcutElement.appendChild(annotationTagName);
