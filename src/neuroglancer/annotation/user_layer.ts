@@ -34,6 +34,8 @@ import {Tab} from 'neuroglancer/widget/tab_view';
 import {Borrowed, RefCounted, registerEventListener} from 'neuroglancer/util/disposable';
 import {EventActionMap, registerActionListener} from 'neuroglancer/util/event_action_map';
 import {KeyboardEventBinder} from 'neuroglancer/util/keyboard_bindings';
+import {Uint64} from 'neuroglancer/util/uint64';
+import {SegmentSelectionState, Uint64MapEntry} from 'neuroglancer/segmentation_display_state/frontend';
 
 require('./user_layer.css');
 
@@ -261,6 +263,17 @@ export class AnnotationUserLayer extends Base {
   }
 
   private getDefaultShortcutActions() {
+    const temp = new Uint64();
+    function toUint64(value: any): Uint64 {
+      if (typeof value === 'number') {
+        temp.low = value;
+        temp.high = 0;
+        value = temp;
+      } else if (value instanceof Uint64MapEntry) {
+        value = value.value;
+      }
+      return value;
+    }
     const jumpToAnnotation = (annotation: Annotation|undefined) => {
       if (annotation && this.annotationLayerState.value) {
         this.selectedAnnotation.value = {id: annotation.id, partIndex: 0};
@@ -268,6 +281,15 @@ export class AnnotationUserLayer extends Base {
         const spatialPoint = vec3.create();
         vec3.transformMat4(spatialPoint, point, this.annotationLayerState.value.objectToGlobal);
         this.manager.setSpatialCoordinates(spatialPoint);
+        this.manager.layerSelectedValues.manualUpdate(spatialPoint);
+        for (let layer of this.manager.layerManager.managedLayers) {
+          let userLayer = layer.layer;
+          if (layer.visible && userLayer && userLayer instanceof SegmentationUserLayer) {
+            userLayer.displayState.segmentSelectionState.set(toUint64(this.manager.layerSelectedValues.get(userLayer)));
+            userLayer.displayState.segmentSelectionState.setRaw(toUint64(this.manager.layerSelectedValues.get(userLayer)));
+            userLayer.selectSegment();
+          }
+        }
       }
     };
     return [
@@ -369,7 +391,6 @@ class AnnotationShortcutsTab extends Tab {
     removeShortcut.addEventListener('click', () => {
       newShortcutElement.remove();
       this.keyShortcuts.push(shortcutCode);
-      // this.layer.unregisterAnnotationShortcut(shortcutTextbox.textContent!, addAnnotationTagToAnnotation);
       shortcutHandler.removeShortcut(shortcutCode);
       tagChangeListener();
       this.unregisterDisposer(tagChangeListener);
