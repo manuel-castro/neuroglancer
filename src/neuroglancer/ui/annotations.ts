@@ -46,8 +46,6 @@ import {RangeWidget} from 'neuroglancer/widget/range';
 import {StackView, Tab} from 'neuroglancer/widget/tab_view';
 import {makeTextIconButton} from 'neuroglancer/widget/text_icon_button';
 import {Uint64EntryWidget} from 'neuroglancer/widget/uint64_entry_widget';
-import {EventActionMap, registerActionListener} from 'neuroglancer/util/event_action_map';
-import {KeyboardEventBinder} from 'neuroglancer/util/keyboard_bindings';
 // import {AutomaticallyFocusedElement} from 'neuroglancer/util/automatic_focus';
 
 type AnnotationIdAndPart = {
@@ -331,18 +329,6 @@ function makePointLink(
   }
 }
 
-function getPointFromAnnotation(annotation: Annotation) {
-  switch (annotation.type) {
-    case AnnotationType.AXIS_ALIGNED_BOUNDING_BOX:
-    case AnnotationType.LINE:
-      return annotation.pointA;
-    case AnnotationType.POINT:
-      return annotation.point;
-    case AnnotationType.ELLIPSOID:
-      return annotation.center;
-  }
-}
-
 export function getPositionSummary(
     element: HTMLElement, annotation: Annotation, transform: mat4, voxelSize: VoxelSize,
     setSpatialCoordinates?: (point: vec3) => void) {
@@ -475,8 +461,6 @@ export class AnnotationLayerView extends Tab {
     this.registerDisposer(
         this.annotationLayer.hoverState.changed.add(() => this.updateHoverView()));
     this.registerDisposer(this.state.changed.add(() => this.updateSelectionView()));
-
-    this.setupAnnotationKeyboardEventBinder();
   }
 
   private updateSelectionView() {
@@ -584,45 +568,12 @@ export class AnnotationLayerView extends Tab {
     if (annotation.description) {
       const description = document.createElement('div');
       description.className = 'neuroglancer-annotation-description';
-      description.textContent = annotation.description;
+      description.textContent = this.layer.getAnnotationText(annotation);
       element.appendChild(description);
     }
     return element;
   }
 
-  private setupAnnotationKeyboardEventBinder() {
-    const {layer, element} = this;
-    element.tabIndex = -1;
-    for (const [actionName, actionFunction] of this.layer.annotationEventActions) {
-      layer.registerDisposer(registerActionListener(element, actionName, actionFunction.bind(layer)));
-      layer.registerAnnotationShortcut(element, actionName, actionFunction);
-    }
-    layer.registerDisposer(registerActionListener(element, 'go-to-next-annotation', () => {
-      layer.selectedAnnotation.value = {id: layer.getNextAnnotationId(), partIndex: 0};
-      const point = getPointFromAnnotation(layer.getNextAnnotation());
-      const spatialPoint = vec3.create();
-      vec3.transformMat4(spatialPoint, point, this.annotationLayer.objectToGlobal);
-      this.setSpatialCoordinates(spatialPoint);
-    }));
-    layer.registerDisposer(registerActionListener(element, 'go-to-prev-annotation', () => {
-      layer.selectedAnnotation.value = {id: layer.getPrevAnnotationId(), partIndex: 0};
-      const point = getPointFromAnnotation(layer.getPrevAnnotation());
-      const spatialPoint = vec3.create();
-      vec3.transformMat4(spatialPoint, point, this.annotationLayer.objectToGlobal);
-      this.setSpatialCoordinates(spatialPoint);
-    }));
-    layer.annotationEventMap.set('bracketright', 'go-to-next-annotation');
-    layer.annotationEventMap.set('bracketleft', 'go-to-prev-annotation');
-    layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  layer.annotationEventMap);
-    // layer.annotationKeyboardEventBinder = new KeyboardEventBinder(element,  EventActionMap.fromObject({
-    //   'bracketright': 'go-to-next-annotation',
-    //   'bracketleft': 'go-to-prev-annotation'
-    // }));
-    // layer.annotationEventMap.set('bracketright', 'go-to-next-annotation');
-    // layer.annotationEventMap.set('bracketleft', 'go-to-prev-annotation');
-    layer.registerDisposer(layer.annotationKeyboardEventBinder);
-    // layer.registerDisposer(new AutomaticallyFocusedElement(element));
-  }
 }
 
 export class AnnotationDetailsTab extends Tab {
@@ -1104,14 +1055,7 @@ export interface UserLayerWithAnnotations extends UserLayer {
   annotationColor: TrackableRGB;
   annotationFillOpacity: TrackableAlphaValue;
   initializeAnnotationLayerViewTab(tab: AnnotationLayerView): void;
-  annotationKeyboardEventBinder?: KeyboardEventBinder<EventActionMap>;
-  annotationEventMap: EventActionMap;
-  annotationEventActions: Map<string, Function>;
-  getNextAnnotationId(): string;
-  getPrevAnnotationId(): string;
-  getNextAnnotation(): Annotation;
-  getPrevAnnotation(): Annotation;
-  registerAnnotationShortcut(eventTarget: EventTarget, actionName: string, actionFunction: Function): void;
+  getAnnotationText(annotation: Annotation): string;
 }
 
 export function getAnnotationRenderOptions(userLayer: UserLayerWithAnnotations) {
@@ -1129,9 +1073,6 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
         this.registerDisposer(new SelectedAnnotationState(this.annotationLayerState.addRef()));
     annotationColor = new TrackableRGB(vec3.fromValues(1, 1, 0));
     annotationFillOpacity = trackableAlphaValue(0.0);
-    annotationKeyboardEventBinder: KeyboardEventBinder<EventActionMap>;
-    annotationEventMap = new EventActionMap();
-    annotationEventActions = new Map<string, Function>();
     constructor(...args: any[]) {
       super(...args);
       this.selectedAnnotation.changed.add(this.specificationChanged.dispatch);
@@ -1179,28 +1120,12 @@ export function UserLayerWithAnnotationsMixin<TBase extends {new (...args: any[]
       return x;
     }
 
-    getNextAnnotationId() {
-      return this.selectedAnnotation.value!.id;
-    }
-
-    getPrevAnnotationId() {
-      return this.selectedAnnotation.value!.id;
-    }
-
-    getNextAnnotation() {
-      return this.selectedAnnotation.reference!.value!;
-    }
-
-    getPrevAnnotation() {
-      return this.selectedAnnotation.reference!.value!;
-    }
-
     initializeAnnotationLayerViewTab(tab: AnnotationLayerView) {
       tab;
     }
 
-    registerAnnotationShortcut(eventTarget: EventTarget, actionName: string, actionFunction: Function) {
-      return;
+    getAnnotationText(annotation: Annotation) {
+      return annotation.description || '';
     }
   }
   return C;
