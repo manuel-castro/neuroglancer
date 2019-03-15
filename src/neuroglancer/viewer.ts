@@ -22,7 +22,7 @@ import {DataSourceProvider} from 'neuroglancer/datasource';
 import {getDefaultDataSourceProvider} from 'neuroglancer/datasource/default_provider';
 import {DisplayContext} from 'neuroglancer/display_context';
 import {InputEventBindingHelpDialog} from 'neuroglancer/help/input_event_bindings';
-import {allRenderLayerRoles, LayerManager, LayerSelectedValues, MouseSelectionState, ActionState, ActionMode, RenderLayerRole, SelectedLayerState} from 'neuroglancer/layer';
+import {allRenderLayerRoles, LayerManager, LayerSelectedValues, MouseSelectionState, ActionState, ActionMode, RenderLayerRole, SelectedLayerState, UserLayer} from 'neuroglancer/layer';
 import {LayerDialog} from 'neuroglancer/layer_dialog';
 import {RootLayoutContainer} from 'neuroglancer/layer_groups_layout';
 import {TopLevelLayerListSpecification} from 'neuroglancer/layer_specification';
@@ -56,6 +56,7 @@ import {MousePositionWidget, PositionWidget, VoxelSizeWidget} from 'neuroglancer
 import {TrackableScaleBarOptions} from 'neuroglancer/widget/scale_bar';
 import {makeTextIconButton} from 'neuroglancer/widget/text_icon_button';
 import {RPC} from 'neuroglancer/worker_rpc';
+import { AnnotationUserLayer } from './annotation/user_layer';
 
 require('./viewer.css');
 require('neuroglancer/noselect.css');
@@ -222,6 +223,8 @@ export class Viewer extends RefCounted implements ViewerState {
 
   uiConfiguration: ViewerUIConfiguration;
 
+  // private annotationLayerWasSelected = false;
+
   private makeUiControlVisibilityState(key: keyof ViewerUIOptions) {
     const showUIControls = this.uiConfiguration.showUIControls;
     const option = this.uiConfiguration[key];
@@ -269,6 +272,7 @@ export class Viewer extends RefCounted implements ViewerState {
     this.visibility = visibility;
     this.inputEventBindings = inputEventBindings;
     this.element = element;
+    this.element.id = 'neuroglancerViewer';
     this.dataSourceProvider = dataSourceProvider;
     this.uiConfiguration = uiConfiguration;
 
@@ -393,6 +397,10 @@ export class Viewer extends RefCounted implements ViewerState {
 
     this.registerDisposer(new MouseSelectionStateTooltipManager(
         this.mouseState, this.layerManager, this.navigationState.voxelSize));
+
+    const maybeAddOrRemoveAnnotationShortcuts = this.annotationShortcutControllerFactory();
+    this.registerDisposer(this.selectedLayer.changed.add(() => maybeAddOrRemoveAnnotationShortcuts()));
+    maybeAddOrRemoveAnnotationShortcuts();
   }
 
   private updateShowBorders() {
@@ -697,5 +705,28 @@ export class Viewer extends RefCounted implements ViewerState {
       }
     }
     this.mouseState.stale = true;
+  }
+
+  private annotationShortcutControllerFactory() {
+    let lastLayerSelected: UserLayer|null = null;
+    const annotationKeyShortcuts = ['keyq', 'keyw', 'keye', 'keyr'];
+    const maybeAddOrRemoveAnnotationShortcuts = () => {
+      if (lastLayerSelected && lastLayerSelected instanceof AnnotationUserLayer) {
+        // remove annotation shortcuts
+      }
+      const selectedLayer = this.selectedLayer.layer;
+      if (selectedLayer) {
+        const userLayer = selectedLayer.layer;
+        if (userLayer instanceof AnnotationUserLayer) {
+          // add bracket and annotation tag events
+          // annotationLayerWasSelected = true;
+        }
+        else {
+          // annotationLayerWasSelected = false;
+        }
+        lastLayerSelected = userLayer;
+      }
+    };
+    return maybeAddOrRemoveAnnotationShortcuts;
   }
 }

@@ -43,11 +43,6 @@ const POINTS_JSON_KEY = 'points';
 const ANNOTATIONS_JSON_KEY = 'annotations';
 const ANNOTATION_TAGS_JSON_KEY = 'annotationTags';
 
-type AnnotationShortcutAction = {
-  actionName: string;
-  actionFunction: Function;
-};
-
 function addPointAnnotations(annotations: LocalAnnotationSource, obj: any) {
   if (obj === undefined) {
     return;
@@ -112,6 +107,8 @@ export class AnnotationUserLayer extends Base {
       new LayerReference(this.manager.rootLayers.addRef(), isValidLinkedSegmentationLayer));
   filterBySegmentation = new TrackableBoolean(false);
   shortcutHandler = this.registerDisposer(new AnnotationShortcutHandler());
+  shortcutHandlerViewer = this.registerDisposer(new AnnotationShortcutHandlerViewer());
+  // private shortcutEventBinder: KeyboardEventBinder<EventActionMap>|undefined = undefined;
 
   getAnnotationRenderOptions() {
     const segmentationState =
@@ -221,7 +218,7 @@ export class AnnotationUserLayer extends Base {
           label));
     }
 
-    this.setupAnnotationShortcuts(tab.element);
+    // this.setupAnnotationShortcuts(tab.element);
   }
 
   toJSON() {
@@ -251,6 +248,10 @@ export class AnnotationUserLayer extends Base {
       return this.localAnnotations.getNextAnnotation(this.selectedAnnotation.value.id)!;
     }
     return;
+  }
+
+  setupAnnotationShortcutsViewer(element: HTMLElement) {
+    this.shortcutHandler.setup(element, )
   }
 
   setupAnnotationShortcuts(element: HTMLElement) {
@@ -349,7 +350,7 @@ class AnnotationShortcutsTab extends Tab {
   }
 
   private addNewShortcut(tagId?: number) {
-    const {localAnnotations, selectedAnnotation, shortcutHandler} = this.layer;
+    const {localAnnotations, selectedAnnotation, shortcutHandlerViewer} = this.layer;
     const newShortcutElement = document.createElement('div');
     newShortcutElement.classList.add('neuroglancer-annotation-shortcut');
     const shortcutTextbox = document.createElement('span');
@@ -459,6 +460,55 @@ class AnnotationShortcutHandler extends RefCounted {
       return true;
     }
     return false;
+  }
+}
+
+class AnnotationShortcutHandlerViewer extends RefCounted {
+  private shortcutEventBinder: KeyboardEventBinder<EventActionMap>|undefined = undefined;
+  private shortcutEventDisposers = new Map<string, () => void>();
+
+  private static getShortcutEventName(shortcutKeyCode: string) {
+    return 'annotationShortcutEvent:' + shortcutKeyCode;
+  }
+
+  addShortcut(shortcutKeyCode: string, shortcutAction: () => void) {
+    if (this.shortcutEventBinder) {
+      const shortcutEventName = AnnotationShortcutHandlerViewer.getShortcutEventName(shortcutKeyCode);
+      const actionRemover = registerActionListener(this.shortcutEventBinder.target, shortcutEventName, shortcutAction);
+      this.shortcutEventBinder.eventMap.set(shortcutKeyCode, shortcutEventName);
+      this.registerDisposer(actionRemover);
+      this.shortcutEventDisposers.set(shortcutKeyCode, actionRemover);
+    } else {
+      // Should never happen
+      throw new Error('Attempt to add annotation shortcut to unselected annotation layer');
+    }
+  }
+
+  removeShortcut(shortcutCode: string) {
+    const actionRemover = this.shortcutEventDisposers.get(shortcutCode);
+    if (actionRemover) {
+      actionRemover();
+      this.shortcutEventBinder!.eventMap.delete(shortcutCode);
+      this.shortcutEventDisposers.delete(shortcutCode);
+      this.unregisterDisposer(actionRemover);
+    }
+  }
+
+  removeAllShortcuts() {
+    for (const shortcutCode of this.shortcutEventDisposers.keys()) {
+      this.removeShortcut(shortcutCode);
+    }
+  }
+
+  setup(shortcutEventTarget: HTMLElement, defaultEventActionMap: EventActionMap, defaultEventActions: Array<{actionName: string, actionFunction: () => void}>) {
+    for (const {actionName, actionFunction} of defaultEventActions) {
+      this.registerDisposer(registerActionListener(shortcutEventTarget, actionName, actionFunction));
+    }
+    if (!this.shortcutEventBinder) {
+      this.shortcutEventBinder = this.registerDisposer(new KeyboardEventBinder<EventActionMap>(shortcutEventTarget, defaultEventActionMap));
+    } else {
+      this.shortcutEventBinder.eventMap = defaultEventActionMap;
+    }
   }
 }
 
