@@ -134,9 +134,6 @@ void emitAnnotation(vec4 color) {
     if (renderContext.emitColor) {
       const colorVec4 = tempPickID;
       const color = annotationLayer.state.color.value;
-      // colorVec4[0] = color[0];
-      // colorVec4[1] = color[1];
-      // colorVec4[2] = color[2];
       colorVec4[0] = color[0];
       colorVec4[1] = color[1];
       colorVec4[2] = color[2];
@@ -145,7 +142,6 @@ void emitAnnotation(vec4 color) {
       const saturationAmount = 0.75;
       for (let i = 0; i < 3; ++i) {
         colorVec4[i] = saturationAmount + (1 - saturationAmount) * colorVec4[i];
-        // colorVec4[i] = 0;
       }
       gl.uniform4fv(shader.uniform('uColorSelected'), colorVec4);
       gl.uniform4fv(

@@ -34,8 +34,6 @@ import {Tab} from 'neuroglancer/widget/tab_view';
 import {Borrowed, RefCounted, registerEventListener} from 'neuroglancer/util/disposable';
 import {EventActionMap, registerActionListener} from 'neuroglancer/util/event_action_map';
 import {KeyboardEventBinder} from 'neuroglancer/util/keyboard_bindings';
-import {Uint64} from 'neuroglancer/util/uint64';
-import {SegmentSelectionState, Uint64MapEntry} from 'neuroglancer/segmentation_display_state/frontend';
 
 require('./user_layer.css');
 
@@ -107,8 +105,10 @@ export class AnnotationUserLayer extends Base {
       new LayerReference(this.manager.rootLayers.addRef(), isValidLinkedSegmentationLayer));
   filterBySegmentation = new TrackableBoolean(false);
   shortcutHandler = this.registerDisposer(new AnnotationShortcutHandler());
-  shortcutHandlerViewer = this.registerDisposer(new AnnotationShortcutHandlerViewer());
-  // private shortcutEventBinder: KeyboardEventBinder<EventActionMap>|undefined = undefined;
+  private keyShortcutModifier = 'shift+';
+  private keyShortcuts = ['q', 'w', 'e', 'r', 't', 'a', 's', 'd', 'f', 'g', 'z', 'x', 'c', 'v'];
+  private tagToShortcut: Map<number, string> = new Map<number, string>();
+  private _numTagsAllowed = this.keyShortcuts.length;
 
   getAnnotationRenderOptions() {
     const segmentationState =
@@ -176,6 +176,10 @@ export class AnnotationUserLayer extends Base {
           order: 1000,
           getter: () => new AnnotationShortcutsTab(this)
         });
+        this.setupAnnotationShortcuts();
+        for (const tagId of this.localAnnotations.getTagIds()) {
+          this.addAnnotationTagShortcut(tagId);
+        }
       }
     } else {
       StatusMessage
@@ -217,8 +221,6 @@ export class AnnotationUserLayer extends Base {
               v => v !== undefined, tab.annotationLayer.segmentationState)),
           label));
     }
-
-    // this.setupAnnotationShortcuts(tab.element);
   }
 
   toJSON() {
@@ -250,31 +252,24 @@ export class AnnotationUserLayer extends Base {
     return;
   }
 
-  setupAnnotationShortcutsViewer(element: HTMLElement) {
-    this.shortcutHandler.setup(element, )
+  enableAnnotationShortcuts() {
+    this.shortcutHandler.enable();
   }
 
-  setupAnnotationShortcuts(element: HTMLElement) {
-    element.tabIndex = -1;
-    this.shortcutHandler.setup(element, EventActionMap.fromObject({
-      'bracketright': 'go-to-next-annotation',
-      'bracketleft': 'go-to-prev-annotation'
-    }), this.getDefaultShortcutActions());
-    // layer.registerDisposer(new AutomaticallyFocusedElement(element));
+  disableAnnotationShortcuts() {
+    this.shortcutHandler.disable();
+  }
+
+  setupAnnotationShortcuts() {
+    const element = document.getElementById('neuroglancerViewer');
+    if (element) {
+      this.shortcutHandler.setup(this.getDefaultShortcutActions());
+    } else {
+      throw new Error('Viewer element does not exist');
+    }
   }
 
   private getDefaultShortcutActions() {
-    const temp = new Uint64();
-    function toUint64(value: any): Uint64 {
-      if (typeof value === 'number') {
-        temp.low = value;
-        temp.high = 0;
-        value = temp;
-      } else if (value instanceof Uint64MapEntry) {
-        value = value.value;
-      }
-      return value;
-    }
     const jumpToAnnotation = (annotation: Annotation|undefined) => {
       if (annotation && this.annotationLayerState.value) {
         this.selectedAnnotation.value = {id: annotation.id, partIndex: 0};
@@ -282,25 +277,18 @@ export class AnnotationUserLayer extends Base {
         const spatialPoint = vec3.create();
         vec3.transformMat4(spatialPoint, point, this.annotationLayerState.value.objectToGlobal);
         this.manager.setSpatialCoordinates(spatialPoint);
-        this.manager.layerSelectedValues.manualUpdate(spatialPoint);
-        for (let layer of this.manager.layerManager.managedLayers) {
-          let userLayer = layer.layer;
-          if (layer.visible && userLayer && userLayer instanceof SegmentationUserLayer) {
-            userLayer.displayState.segmentSelectionState.set(toUint64(this.manager.layerSelectedValues.get(userLayer)));
-            userLayer.displayState.segmentSelectionState.setRaw(toUint64(this.manager.layerSelectedValues.get(userLayer)));
-            userLayer.selectSegment();
-          }
-        }
       }
     };
     return [
       {
+        keyCode: 'bracketright',
         actionName: 'go-to-next-annotation',
         actionFunction: () => {
           jumpToAnnotation(this.getNextAnnotation());
         }
       },
       {
+        keyCode: 'bracketleft',
         actionName: 'go-to-prev-annotation',
         actionFunction: () => {
           jumpToAnnotation(this.getPrevAnnotation());
@@ -321,195 +309,166 @@ export class AnnotationUserLayer extends Base {
     }
     return text;
   }
+
+  addAnnotationTagShortcut(tagId: number) {
+    const {localAnnotations, selectedAnnotation, shortcutHandler: shortcutHandlerViewer} = this;
+    const shortcutKey = this.keyShortcuts.splice(0, 1)[0];
+    const shortcutCode = this.keyShortcutModifier + 'key' + shortcutKey;
+    this.tagToShortcut.set(tagId, shortcutCode);
+    const addAnnotationTagToAnnotation = () => {
+      const reference = selectedAnnotation.reference;
+      if (reference && reference.value) {
+        localAnnotations.toggleAnnotationTag(reference, tagId);
+      }
+    };
+    shortcutHandlerViewer.addShortcut(shortcutCode, addAnnotationTagToAnnotation);
+  }
+
+  addAnnotationTag() {
+    if (this.keyShortcuts.length > 0) {
+      const newTagId = this.localAnnotations.addTag('');
+      this.addAnnotationTagShortcut(newTagId);
+      return newTagId;
+    }
+    return;
+  }
+
+  get numTagsAllowed() {
+    return this._numTagsAllowed;
+  }
+
+  getShortcutText(tagId: number) {
+    const shortcutCode = this.tagToShortcut.get(tagId)!;
+    return shortcutCode.slice(0, -4) + shortcutCode.slice(-1);
+  }
+
+  deleteAnnotationTag(tagId: number) {
+    const shortcutCode = this.tagToShortcut.get(tagId)!;
+    this.shortcutHandler.removeShortcut(shortcutCode);
+    this.keyShortcuts.push(shortcutCode);
+    this.tagToShortcut.delete(tagId);
+    this.localAnnotations.deleteTag(tagId);
+  }
 }
 
 class AnnotationShortcutsTab extends Tab {
-  private keyShortcuts = ['keyq', 'keyw', 'keye', 'keyr'];
   constructor(public layer: Borrowed<AnnotationUserLayer>) {
     super();
     const {element} = this;
     element.classList.add('neuroglancer-annotation-shortcuts-tab');
     const addShortcutButton = document.createElement('button');
     addShortcutButton.textContent = '+';
-    const numShortcuts = this.keyShortcuts.length;
     addShortcutButton.addEventListener('click', () => {
-      if (this.keyShortcuts.length === 0) {
-        alert(`Reached max number of shortcuts. Currently, only ${numShortcuts} are supported.`);
+      const newTagId = this.layer.addAnnotationTag();
+      if (newTagId === undefined) {
+        alert(`Reached max number of shortcuts. Currently, only ${this.layer.numTagsAllowed} are supported.`);
       } else {
-        this.addNewShortcut();
+        this.addNewTagElement(newTagId);
       }
     });
     element.appendChild(addShortcutButton);
-    for (const tagId of layer.localAnnotations.getTagIds()) {
-      if (this.keyShortcuts.length === 0) {
-        throw new Error(`Too many tags in JSON state. Currently, only ${numShortcuts} are supported.`);
-      } else {
-        this.addNewShortcut(tagId);
-      }
+    for (const tagId of this.layer.localAnnotations.getTagIds()) {
+      this.addNewTagElement(tagId);
     }
   }
 
-  private addNewShortcut(tagId?: number) {
-    const {localAnnotations, selectedAnnotation, shortcutHandlerViewer} = this.layer;
-    const newShortcutElement = document.createElement('div');
-    newShortcutElement.classList.add('neuroglancer-annotation-shortcut');
+  private addNewTagElement(tagId: number) {
+    const {layer} = this;
+    const {localAnnotations} = layer;
+    const newTagElement = document.createElement('div');
+    newTagElement.classList.add('neuroglancer-annotation-shortcut');
     const shortcutTextbox = document.createElement('span');
-    const shortcutCode = shortcutTextbox.textContent = this.keyShortcuts.pop()!;
     shortcutTextbox.className = 'display-annotation-shortcut-textbox';
+    shortcutTextbox.textContent = this.layer.getShortcutText(tagId);
     const annotationTagName = document.createElement('input');
-    annotationTagName.value = '';
-    if (tagId !== undefined) {
-      const tag = localAnnotations.getTag(tagId);
-      if (tag) {
-        annotationTagName.value = tag.label;
-      }
+    const tag = localAnnotations.getTag(tagId);
+    if (tag) {
+      annotationTagName.value = tag.label;
+    } else {
+      throw new Error(`Tag ${tagId} does not exist`);
     }
-    // const addAnnotationTagToAnnotation = () => {
-    //   console.log(annotationTagName.value);
-    //   const reference = selectedAnnotation.reference;
-    //   if (reference && reference.value) {
-    //     localAnnotations.update(reference, {...reference.value, description: annotationTagName.value});
-    //     localAnnotations.commit(reference);
-    //   }
-    // };
-    const annotationTagId = (tagId === undefined) ? localAnnotations.addTag(annotationTagName.value) : tagId;
-
-    const tagChangeListener = registerEventListener(annotationTagName, 'input', () => {
-      console.log(annotationTagName.value);
-      localAnnotations.updateTagLabel(annotationTagId, annotationTagName.value);
+    const tagChangeListenerDisposer = registerEventListener(annotationTagName, 'input', () => {
+      localAnnotations.updateTagLabel(tagId, annotationTagName.value);
     });
-    this.registerDisposer(tagChangeListener);
-    const addAnnotationTagToAnnotation = () => {
-      const reference = selectedAnnotation.reference;
-      if (reference && reference.value) {
-        localAnnotations.toggleAnnotationTag(reference, annotationTagId);
-        // localAnnotations.commit(reference);
-      }
-    };
-    shortcutHandler.addShortcut(shortcutCode, addAnnotationTagToAnnotation);
-    const removeShortcut = document.createElement('button');
-    removeShortcut.textContent = 'x';
-    removeShortcut.addEventListener('click', () => {
-      newShortcutElement.remove();
-      this.keyShortcuts.push(shortcutCode);
-      shortcutHandler.removeShortcut(shortcutCode);
-      tagChangeListener();
-      this.unregisterDisposer(tagChangeListener);
-      localAnnotations.deleteTag(annotationTagId);
+    this.registerDisposer(tagChangeListenerDisposer);
+    const deleteTag = document.createElement('button');
+    deleteTag.textContent = 'x';
+    deleteTag.addEventListener('click', () => {
+      newTagElement.remove();
+      tagChangeListenerDisposer();
+      this.unregisterDisposer(tagChangeListenerDisposer);
+      layer.deleteAnnotationTag(tagId);
     });
-    newShortcutElement.appendChild(shortcutTextbox);
-    newShortcutElement.appendChild(annotationTagName);
-    newShortcutElement.appendChild(removeShortcut);
-    this.element.appendChild(newShortcutElement);
+    newTagElement.appendChild(shortcutTextbox);
+    newTagElement.appendChild(annotationTagName);
+    newTagElement.appendChild(deleteTag);
+    this.element.appendChild(newTagElement);
   }
+
 }
 
 class AnnotationShortcutHandler extends RefCounted {
-  private shortcutEventBinder: KeyboardEventBinder<EventActionMap>|undefined = undefined;
-  // shortcutEventActions is a map from a keycode to the action that it triggers.
-  // it's used to hold actions until the 'Annotations' tab is created.
-  private shortcutEventActions = new Map<string, () => void>();
+  private shortcutEventBinder = this.registerDisposer(new KeyboardEventBinder<EventActionMap>(document.getElementById('neuroglancerViewer')!, new EventActionMap()));
+  private shortcutEventActions = new Map<string, {actionName: string, actionFunction: () => void}>();
   private shortcutEventDisposers = new Map<string, () => void>();
+  private enabled = false;
 
   private static getShortcutEventName(shortcutKeyCode: string) {
     return 'annotationShortcutEvent:' + shortcutKeyCode;
   }
 
-  private isSetup() {
-    return !!this.shortcutEventBinder;
-  }
-
-  addShortcut(shortcutKeyCode: string, shortcutAction: () => void) {
-    if (this.isSetup()) {
-      const shortcutEventName = AnnotationShortcutHandler.getShortcutEventName(shortcutKeyCode);
-      const actionRemover = registerActionListener(this.shortcutEventBinder!.target, shortcutEventName, shortcutAction);
-      this.shortcutEventBinder!.eventMap.set(shortcutKeyCode, shortcutEventName);
-      this.registerDisposer(actionRemover);
-      this.shortcutEventDisposers.set(shortcutKeyCode, actionRemover);
-      return true;
-    }
-    // Event will be added later when 'Annotations' tab is created
-    this.shortcutEventActions.set(shortcutKeyCode, shortcutAction);
-    return false;
-  }
-
-  removeShortcut(shortcutCode: string) {
-    if (this.isSetup()) {
-      const actionRemover = this.shortcutEventDisposers.get(shortcutCode);
-      if (actionRemover) {
-        actionRemover();
-        this.shortcutEventBinder!.eventMap.delete(shortcutCode);
-        this.shortcutEventDisposers.delete(shortcutCode);
-        this.unregisterDisposer(actionRemover);
-      }
-    } else {
-      this.shortcutEventActions.delete(shortcutCode);
-    }
-  }
-
-  setup(shortcutEventTarget: HTMLElement, defaultEventActionMap: EventActionMap, defaultEventActions: Array<{actionName: string, actionFunction: () => void}>) {
-    if (!this.isSetup()) {
-      for (const {actionName, actionFunction} of defaultEventActions) {
-        this.registerDisposer(registerActionListener(shortcutEventTarget, actionName, actionFunction));
-      }
-      this.shortcutEventBinder = this.registerDisposer(new KeyboardEventBinder<EventActionMap>(shortcutEventTarget, defaultEventActionMap));
-      for (const [keyCode, shortcutAction] of this.shortcutEventActions) {
-        this.addShortcut(keyCode, shortcutAction);
-      }
-      this.shortcutEventActions.clear();
-      return true;
-    }
-    return false;
-  }
-}
-
-class AnnotationShortcutHandlerViewer extends RefCounted {
-  private shortcutEventBinder: KeyboardEventBinder<EventActionMap>|undefined = undefined;
-  private shortcutEventDisposers = new Map<string, () => void>();
-
-  private static getShortcutEventName(shortcutKeyCode: string) {
-    return 'annotationShortcutEvent:' + shortcutKeyCode;
-  }
-
-  addShortcut(shortcutKeyCode: string, shortcutAction: () => void) {
-    if (this.shortcutEventBinder) {
-      const shortcutEventName = AnnotationShortcutHandlerViewer.getShortcutEventName(shortcutKeyCode);
-      const actionRemover = registerActionListener(this.shortcutEventBinder.target, shortcutEventName, shortcutAction);
-      this.shortcutEventBinder.eventMap.set(shortcutKeyCode, shortcutEventName);
-      this.registerDisposer(actionRemover);
-      this.shortcutEventDisposers.set(shortcutKeyCode, actionRemover);
-    } else {
-      // Should never happen
-      throw new Error('Attempt to add annotation shortcut to unselected annotation layer');
-    }
-  }
-
-  removeShortcut(shortcutCode: string) {
+  private disableShortcut(shortcutCode: string) {
     const actionRemover = this.shortcutEventDisposers.get(shortcutCode);
+    this.shortcutEventBinder!.eventMap.delete(shortcutCode);
     if (actionRemover) {
       actionRemover();
-      this.shortcutEventBinder!.eventMap.delete(shortcutCode);
       this.shortcutEventDisposers.delete(shortcutCode);
       this.unregisterDisposer(actionRemover);
     }
   }
 
-  removeAllShortcuts() {
-    for (const shortcutCode of this.shortcutEventDisposers.keys()) {
-      this.removeShortcut(shortcutCode);
+  private enableShortcut(shortcutCode: string, shortcutEventName: string, shortcutAction: () => void) {
+    this.shortcutEventBinder!.eventMap.set(shortcutCode, shortcutEventName);
+    const actionRemover = registerActionListener(this.shortcutEventBinder!.target, shortcutEventName, shortcutAction);
+    this.registerDisposer(actionRemover);
+    this.shortcutEventDisposers.set(shortcutCode, actionRemover);
+  }
+
+  addShortcut(shortcutCode: string, shortcutAction: () => void) {
+    const shortcutEventName = AnnotationShortcutHandler.getShortcutEventName(shortcutCode);
+    if (this.enabled) {
+      this.enableShortcut(shortcutCode, shortcutEventName, shortcutAction);
+    }
+    this.shortcutEventActions.set(shortcutCode, {actionName: shortcutEventName, actionFunction: shortcutAction});
+  }
+
+  removeShortcut(shortcutCode: string) {
+    if (this.enabled) {
+      this.disableShortcut(shortcutCode);
+    }
+    this.shortcutEventActions.delete(shortcutCode);
+  }
+
+  enable() {
+    for (const [shortcutCode, {actionName, actionFunction}] of this.shortcutEventActions) {
+      this.enableShortcut(shortcutCode, actionName, actionFunction);
+    }
+    this.enabled = true;
+  }
+
+  disable() {
+    for (const shortcutCode of this.shortcutEventActions.keys()) {
+      this.disableShortcut(shortcutCode);
+    }
+    this.enabled = false;
+  }
+
+  setup(initialActions: {keyCode: string, actionName: string, actionFunction: () => void}[]) {
+    for (const action of initialActions) {
+      this.shortcutEventActions.set(action.keyCode, {actionName: action.actionName, actionFunction: action.actionFunction});
     }
   }
 
-  setup(shortcutEventTarget: HTMLElement, defaultEventActionMap: EventActionMap, defaultEventActions: Array<{actionName: string, actionFunction: () => void}>) {
-    for (const {actionName, actionFunction} of defaultEventActions) {
-      this.registerDisposer(registerActionListener(shortcutEventTarget, actionName, actionFunction));
-    }
-    if (!this.shortcutEventBinder) {
-      this.shortcutEventBinder = this.registerDisposer(new KeyboardEventBinder<EventActionMap>(shortcutEventTarget, defaultEventActionMap));
-    } else {
-      this.shortcutEventBinder.eventMap = defaultEventActionMap;
-    }
-  }
 }
 
 registerLayerType('annotation', AnnotationUserLayer);

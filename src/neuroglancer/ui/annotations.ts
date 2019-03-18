@@ -46,7 +46,6 @@ import {RangeWidget} from 'neuroglancer/widget/range';
 import {StackView, Tab} from 'neuroglancer/widget/tab_view';
 import {makeTextIconButton} from 'neuroglancer/widget/text_icon_button';
 import {Uint64EntryWidget} from 'neuroglancer/widget/uint64_entry_widget';
-// import {AutomaticallyFocusedElement} from 'neuroglancer/util/automatic_focus';
 
 type AnnotationIdAndPart = {
   id: string,
@@ -565,15 +564,15 @@ export class AnnotationLayerView extends Tab {
     getPositionSummary(position, annotation, transform, this.voxelSize, this.setSpatialCoordinates);
     element.appendChild(position);
 
-    if (annotation.description) {
+    const annotationText = this.layer.getAnnotationText(annotation);
+    if (annotationText) {
       const description = document.createElement('div');
       description.className = 'neuroglancer-annotation-description';
-      description.textContent = this.layer.getAnnotationText(annotation);
+      description.textContent = annotationText;
       element.appendChild(description);
     }
     return element;
   }
-
 }
 
 export class AnnotationDetailsTab extends Tab {

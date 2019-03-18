@@ -24,8 +24,6 @@ import {parseArray, verify3dScale, verify3dVec, verifyEnumString, verifyObject, 
 import {getRandomHexString} from 'neuroglancer/util/random';
 import {NullarySignal} from 'neuroglancer/util/signal';
 import {Uint64} from 'neuroglancer/util/uint64';
-// import {EventActionMap} from 'neuroglancer/util/event_action_map';
-// import {KeyboardEventBinder} from 'neuroglancer/util/keyboard_bindings';
 export type AnnotationId = string;
 
 export class AnnotationReference extends RefCounted {
@@ -256,7 +254,6 @@ export function annotationToJson(annotation: Annotation) {
 
 export function restoreAnnotation(obj: any, allowMissingId = false): Annotation {
   verifyObject(obj);
-  // console.log(obj);
   const tagIds = verifyObjectProperty(obj, 'tagIds', x => restoreAnnotationsTags(x));
   const type = verifyObjectProperty(obj, 'type', x => verifyEnumString(x, AnnotationType));
   const id =
@@ -280,7 +277,6 @@ function restoreAnnotationTag(obj: any): AnnotationTag {
   const result: AnnotationTag = <any> {
     id: verifyObjectProperty(obj, 'id', verifyPositiveInt),
     label: verifyObjectProperty(obj, 'label', verifyString)
-    // ,taggedAnnotations: new Set<Annotation>()
   };
   return result;
 }
@@ -305,7 +301,6 @@ export class AnnotationSource extends RefCounted {
       id: this.maxTagId, label
     };
     this.tags.set(this.maxTagId, tag);
-    // do we need this? prob.
     this.changed.dispatch();
     return this.maxTagId;
   }
@@ -319,9 +314,6 @@ export class AnnotationSource extends RefCounted {
           annotation.tagIds.delete(tagId);
         }
       }
-      // for (const taggedAnnotation of annotationTag.taggedAnnotations) {
-      //   taggedAnnotation.tagId = undefined;
-      // }
       this.changed.dispatch();
     }
   }
@@ -338,9 +330,7 @@ export class AnnotationSource extends RefCounted {
     if (annotation.tagIds) {
       annotation.tagIds.forEach(tagId => {
         const annotationTag = this.tags.get(tagId);
-        if (annotationTag) {
-          // annotationTag.taggedAnnotations.add(annotation);
-        } else {
+        if (!annotationTag) {
           throw new Error(`AnnotationTag id ${tagId} listed for Annotation ${annotation.id} does not exist`);
         }
       });
@@ -356,7 +346,7 @@ export class AnnotationSource extends RefCounted {
     }
   }
 
-  private insertAnnotationNode(id: AnnotationId, annotation: Annotation) {
+  private insertAnnotationNode(annotation: Annotation) {
     this.validateTags(annotation);
     let annotationNode: any = {
       ...annotation,
@@ -416,7 +406,7 @@ export class AnnotationSource extends RefCounted {
     } else if (this.annotationMap.has(annotation.id)) {
       throw new Error(`Annotation id already exists: ${JSON.stringify(annotation.id)}.`);
     }
-    this.insertAnnotationNode(annotation.id, annotation);
+    this.insertAnnotationNode(annotation);
     this.changed.dispatch();
     if (!commit) {
       this.pending.add(annotation.id);
@@ -438,27 +428,6 @@ export class AnnotationSource extends RefCounted {
     reference.changed.dispatch();
     this.changed.dispatch();
   }
-
-  // private toggleAnnotationTag(annotation: Annotation, tagId: number) {
-  //   if (!annotation.tagIds) {
-  //     annotation.tagIds = new Set<number>();
-  //   }
-  //   if (annotation.tagIds.has(tagId)) {
-  //     annotation.tagIds.delete(tagId);
-  //   } else {
-  //     annotation.tagIds.add(tagId);
-  //     this.validateTags(annotation);
-  //   }
-  // }
-
-  // private toggleAnnotationNodeTag(id: AnnotationId, tagId: number) {
-  //   const annotation = this.annotationMap.get(id);
-  //   if (annotation) {
-  //     this.toggleAnnotationTag(annotation, tagId);
-  //   } else {
-  //     console.log('reference exists but not in map');
-  //   }
-  // }
 
   toggleAnnotationTag(reference: AnnotationReference, tagId: number) {
     const annotation = reference.value;
@@ -542,9 +511,6 @@ export class AnnotationSource extends RefCounted {
     this.annotationMap.clear();
     this.lastAnnotationNode = null;
     this.pending.clear();
-    // for (const annotationTag of this.annotationTags.values()) {
-    //   annotationTag.taggedAnnotations.clear();
-    // }
     this.changed.dispatch();
   }
 
@@ -570,7 +536,7 @@ export class AnnotationSource extends RefCounted {
     if (annotationObj !== undefined) {
       parseArray(annotationObj, x => {
         const annotation = restoreAnnotation(x);
-        this.insertAnnotationNode(annotation.id, annotation);
+        this.insertAnnotationNode(annotation);
       });
     }
     for (const reference of this.references.values()) {
