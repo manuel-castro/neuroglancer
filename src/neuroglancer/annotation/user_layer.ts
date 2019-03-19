@@ -357,6 +357,7 @@ class AnnotationShortcutsTab extends Tab {
     const {element} = this;
     element.classList.add('neuroglancer-annotation-shortcuts-tab');
     const addShortcutButton = document.createElement('button');
+    addShortcutButton.classList.add('neuroglancer-annotation-shortcut-button');
     addShortcutButton.textContent = '+';
     addShortcutButton.addEventListener('click', () => {
       const newTagId = this.layer.addAnnotationTag();
@@ -366,6 +367,10 @@ class AnnotationShortcutsTab extends Tab {
         this.addNewTagElement(newTagId);
       }
     });
+    const addShortcutButtonLabel = document.createElement('span');
+    addShortcutButtonLabel.classList.add('neuroglancer-annotation-shortcut-button-label');
+    addShortcutButtonLabel.textContent = 'Add annotation shortcut: ';
+    element.appendChild(addShortcutButtonLabel);
     element.appendChild(addShortcutButton);
     for (const tagId of this.layer.localAnnotations.getTagIds()) {
       this.addNewTagElement(tagId);
