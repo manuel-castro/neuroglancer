@@ -270,6 +270,7 @@ export class AnnotationUserLayer extends Base {
   }
 
   private getDefaultShortcutActions() {
+    let lastAnnotation: Annotation|undefined;
     const jumpToAnnotation = (annotation: Annotation|undefined) => {
       if (annotation && this.annotationLayerState.value) {
         this.selectedAnnotation.value = {id: annotation.id, partIndex: 0};
@@ -277,6 +278,24 @@ export class AnnotationUserLayer extends Base {
         const spatialPoint = vec3.create();
         vec3.transformMat4(spatialPoint, point, this.annotationLayerState.value.objectToGlobal);
         this.manager.setSpatialCoordinates(spatialPoint);
+        if (this.linkedSegmentationLayer && this.annotationLayerState.value && this.annotationLayerState.value.segmentationState.value) {
+          const rootSegs = this.annotationLayerState.value!.segmentationState.value!.rootSegments;
+          if (lastAnnotation && lastAnnotation.segments) {
+            lastAnnotation.segments.forEach(segment => {
+              if (rootSegs.has(segment)) {
+                rootSegs.delete(segment);
+              }
+            });
+          }
+          if (annotation.segments) {
+            annotation.segments.forEach(segment => {
+              if (!rootSegs.has(segment)) {
+                rootSegs.add(segment);
+              }
+            });
+          }
+          lastAnnotation = annotation;
+        }
       }
     };
     return [
