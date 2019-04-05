@@ -358,7 +358,7 @@ export class AnnotationUserLayer extends Base {
 
   getShortcutText(tagId: number) {
     const shortcutCode = this.tagToShortcut.get(tagId)!;
-    return shortcutCode.slice(0, -4) + shortcutCode.slice(-1);
+    return shortcutCode.charAt(0).toUpperCase() + shortcutCode.slice(1, -4) + shortcutCode.slice(-1);
   }
 
   deleteAnnotationTag(tagId: number) {
@@ -375,6 +375,7 @@ class AnnotationShortcutsTab extends Tab {
     super();
     const {element} = this;
     element.classList.add('neuroglancer-annotation-shortcuts-tab');
+    const addAnnotationTagDiv = document.createElement('div');
     const addShortcutButton = document.createElement('button');
     addShortcutButton.classList.add('neuroglancer-annotation-shortcut-button');
     addShortcutButton.textContent = '+';
@@ -389,8 +390,19 @@ class AnnotationShortcutsTab extends Tab {
     const addShortcutButtonLabel = document.createElement('span');
     addShortcutButtonLabel.classList.add('neuroglancer-annotation-shortcut-button-label');
     addShortcutButtonLabel.textContent = 'Add annotation shortcut: ';
-    element.appendChild(addShortcutButtonLabel);
-    element.appendChild(addShortcutButton);
+    addAnnotationTagDiv.appendChild(addShortcutButtonLabel);
+    addAnnotationTagDiv.appendChild(addShortcutButton);
+    const shortcutListHeader = document.createElement('div');
+    shortcutListHeader.classList.add('annotation-shorcut-list-header');
+    const shortcutHeader = document.createElement('span');
+    shortcutHeader.textContent = 'Key shortcut';
+    shortcutHeader.classList.add('annotation-key-shortcut-header');
+    const tagHeader = document.createElement('span');
+    tagHeader.textContent = 'Tag input';
+    shortcutListHeader.appendChild(shortcutHeader);
+    shortcutListHeader.appendChild(tagHeader);
+    element.appendChild(addAnnotationTagDiv);
+    element.appendChild(shortcutListHeader);
     for (const tagId of this.layer.localAnnotations.getTagIds()) {
       this.addNewTagElement(tagId);
     }
@@ -405,6 +417,7 @@ class AnnotationShortcutsTab extends Tab {
     shortcutTextbox.className = 'display-annotation-shortcut-textbox';
     shortcutTextbox.textContent = this.layer.getShortcutText(tagId);
     const annotationTagName = document.createElement('input');
+    annotationTagName.className = 'annotation-tag-input';
     const tag = localAnnotations.getTag(tagId);
     if (tag) {
       annotationTagName.value = tag.label;
@@ -416,6 +429,7 @@ class AnnotationShortcutsTab extends Tab {
     });
     this.registerDisposer(tagChangeListenerDisposer);
     const deleteTag = document.createElement('button');
+    deleteTag.className = 'delete-annotation-tag';
     deleteTag.textContent = 'x';
     deleteTag.addEventListener('click', () => {
       newTagElement.remove();
